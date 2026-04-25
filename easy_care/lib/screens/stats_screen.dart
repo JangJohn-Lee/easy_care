@@ -40,7 +40,6 @@ class _StatsScreenState extends State<StatsScreen> {
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          // 모델 리스트로 변환
           final allRecords = snapshot.data!.docs
               .map((doc) => HealthRecord.fromFirestore(doc))
               .toList();
@@ -53,7 +52,6 @@ class _StatsScreenState extends State<StatsScreen> {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                // [규칙 3] 차트 모드일 때 혈당/혈압 전환 토글 및 기간 필터
                 if (!_isCalendarView) ...[
                   _buildChartTypeToggle(),
                   const SizedBox(height: 16),
@@ -75,7 +73,6 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  // --- [규칙 3] 혈당/혈압 전환 토글 ---
   Widget _buildChartTypeToggle() {
     return SegmentedButton<String>(
       segments: const [
@@ -105,12 +102,110 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
+  // --- 차트 그리기 (최고/최저 가로선 및 툴팁 로직 강화) ---
   Widget _buildChartView(List<HealthRecord> records, bool isDark) {
-    if (records.isEmpty) return const SizedBox(height: 300, child: Center(child: Text("기록이 없습니다.")));
+    if (records.isEmpty) return const SizedBox(height: 300, child: Center(child: Text("해당 기간에 기록이 없습니다.")));
+
+    final reversed = records.reversed.toList();
+    
+    // 1. 최고/최저값 인덱스 및 실제 수치 계산
+    int maxSugarIdx = 0, minSugarIdx = 0;
+    int maxSysIdx = -1, minDiaIdx = -1;
+
+    for (int i = 0; i < reversed.length; i++) {
+      if (reversed[i].sugar > reversed[maxSugarIdx].sugar) maxSugarIdx = i;
+      if (reversed[i].sugar < reversed[minSugarIdx].sugar) minSugarIdx = i;
+      
+      if (reversed[i].systolic != null) {
+        if (maxSysIdx == -1 || reversed[i].systolic! > reversed[maxSysIdx].systolic!) maxSysIdx = i;
+      }
+      if (reversed[i].diastolic != null) {
+        if (minDiaIdx == -1 || reversed[i].diastolic! < reversed[minDiaIdx].diastolic!) minDiaIdx = i;
+      }
+    }
+    if (maxSysIdx == -1) maxSysIdx = 0;
+    if (minDiaIdx == -1) minDiaIdx = 0;
+
+    double maxSugarVal = reversed[maxSugarIdx].sugar.toDouble();
+    double minSugarVal = reversed[minSugarIdx].sugar.toDouble();
+    double maxSysVal = (reversed[maxSysIdx].systolic ?? 0).toDouble();
+    double minDiaVal = (reversed[minDiaIdx].diastolic ?? 0).toDouble();
+
+    // 2. 기준선 및 대칭 여백 계산
+    final double baselineY = _chartType == '혈당' ? 100.0 : 120.0; 
+    final String baselineLabel = _chartType == '혈당' ? '정상기준 (100)' : '정상수축기 (120)';
+
+    double maxDistance = 0.0;
+    for (var r in reversed) {
+      if (_chartType == '혈당') {
+        final distance = (r.sugar - baselineY).abs();
+        if (distance > maxDistance) maxDistance = distance;
+      } else {
+        if (r.systolic != null) {
+          final sysDistance = (r.systolic! - baselineY).abs();
+          if (sysDistance > maxDistance) maxDistance = sysDistance;
+        }
+        if (r.diastolic != null) {
+          final diaDistance = (r.diastolic! - baselineY).abs();
+          if (diaDistance > maxDistance) maxDistance = diaDistance;
+        }
+      }
+    }
+
+    if (maxDistance == 0) maxDistance = 20.0;
+
+    final double padding = (maxDistance * 0.2) + 40.0; 
+    final double finalMaxY = baselineY + maxDistance + padding;
+    final double finalMinY = (baselineY - maxDistance - padding).clamp(0.0, double.infinity);
+
+    // 3. ExtraLines (가로선) 리스트 구성 - 정상선 + 최고선 + 최저선
+    List<HorizontalLine> horizontalLines = [
+      HorizontalLine(
+        y: baselineY,
+        color: const Color(0xFF047857).withOpacity(0.5), 
+        strokeWidth: 2,
+        dashArray: [5, 5],
+        label: HorizontalLineLabel(
+          show: true,
+          alignment: Alignment.topRight,
+          padding: const EdgeInsets.only(right: 5, bottom: 5),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+          labelResolver: (line) => baselineLabel,
+        ),
+      )
+    ];
+
+    if (_chartType == '혈당') {
+      horizontalLines.add(HorizontalLine(
+        y: maxSugarVal,
+        color: Colors.redAccent.withOpacity(0.5), strokeWidth: 1.5, dashArray: [4, 4],
+        label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold), labelResolver: (_) => '최고 ($maxSugarVal)'),
+      ));
+      if (maxSugarVal != minSugarVal) {
+        horizontalLines.add(HorizontalLine(
+          y: minSugarVal,
+          color: Colors.blueAccent.withOpacity(0.5), strokeWidth: 1.5, dashArray: [4, 4],
+          label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold), labelResolver: (_) => '최저 ($minSugarVal)'),
+        ));
+      }
+    } else {
+      horizontalLines.add(HorizontalLine(
+        y: maxSysVal,
+        color: Colors.redAccent.withOpacity(0.5), strokeWidth: 1.5, dashArray: [4, 4],
+        label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold), labelResolver: (_) => '최고 수축기 ($maxSysVal)'),
+      ));
+      if (maxSysVal != minDiaVal) {
+        horizontalLines.add(HorizontalLine(
+          y: minDiaVal,
+          color: Colors.blueAccent.withOpacity(0.5), strokeWidth: 1.5, dashArray: [4, 4],
+          label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold), labelResolver: (_) => '최저 이완기 ($minDiaVal)'),
+        ));
+      }
+    }
 
     return Container(
       height: 350,
-      padding: const EdgeInsets.fromLTRB(10, 40, 25, 10),
+      padding: const EdgeInsets.fromLTRB(10, 20, 25, 10),
       decoration: BoxDecoration(
         color: isDark ? Colors.white10 : Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -118,48 +213,116 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
       child: LineChart(
         LineChartData(
-          // [규칙 3] 의학적 기준선(ExtraLines) 추가
-          extraLinesData: ExtraLinesData(
-            horizontalLines: _chartType == '혈당' 
-              ? [HorizontalLine(y: 140, color: Colors.redAccent.withOpacity(0.5), strokeWidth: 2, dashArray: [5, 5], label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, labelResolver: (line) => '식후기준'))]
-              : [HorizontalLine(y: 140, color: Colors.redAccent.withOpacity(0.5), strokeWidth: 2, dashArray: [5, 5], label: HorizontalLineLabel(show: true, labelResolver: (line) => '고혈압'))],
+          minY: finalMinY,
+          maxY: finalMaxY,
+          lineTouchData: LineTouchData(
+            enabled: true,
+            // 터치 시 나타나는 수직선(인디케이터) 디자인 커스텀
+            getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+              return spotIndexes.map((spotIndex) {
+                return TouchedSpotIndicatorData(
+                  FlLine(
+                    color: isDark ? Colors.white30 : Colors.grey.shade400, // 그래프 선과 차별화된 회색
+                    strokeWidth: 2,
+                    dashArray: [4, 4], // 점선으로 처리
+                  ),
+                  FlDotData(
+                    show: true,
+                    getDotPainter: (spot, percent, barData, index) {
+                      return FlDotCirclePainter(
+                        radius: 5,
+                        color: barData.color ?? Colors.blue,
+                        strokeWidth: 2,
+                        strokeColor: isDark ? Colors.black : Colors.white,
+                      );
+                    },
+                  ),
+                );
+              }).toList();
+            },
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (spot) => isDark ? Colors.grey.shade800 : Colors.black87.withOpacity(0.8),
+              tooltipRoundedRadius: 8,
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((LineBarSpot touchedSpot) {
+                  final record = reversed[touchedSpot.spotIndex];
+                  final dateStr = "${record.timestamp.month}/${record.timestamp.day}";
+                  
+                  if (_chartType == '혈당') {
+                    return LineTooltipItem(
+                      '$dateStr\n',
+                      const TextStyle(color: Colors.white70, fontSize: 12),
+                      children: [
+                        TextSpan(
+                          text: '혈당: ${record.sugar}', // 혈당:숫자 명확히 표기
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ],
+                    );
+                  } else {
+                    bool isSys = touchedSpot.barIndex == 0;
+                    String prefix = isSys ? "수축기: " : "이완기: ";
+                    int val = isSys ? (record.systolic ?? 0) : (record.diastolic ?? 0);
+                    Color valColor = isSys ? Colors.orangeAccent : Colors.lightBlueAccent;
+
+                    return LineTooltipItem(
+                      '$dateStr\n',
+                      const TextStyle(color: Colors.white70, fontSize: 12),
+                      children: [
+                        TextSpan(
+                          text: '$prefix$val',
+                          style: TextStyle(color: valColor, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ],
+                    );
+                  }
+                }).toList();
+              },
+            ),
           ),
+          extraLinesData: ExtraLinesData(horizontalLines: horizontalLines),
           gridData: const FlGridData(show: false),
           titlesData: const FlTitlesData(show: false),
           borderData: FlBorderData(show: false),
-          lineBarsData: _getLineBarsData(records),
+          lineBarsData: _getLineBarsData(reversed, maxSugarIdx, minSugarIdx, maxSysIdx, minDiaIdx),
         ),
       ),
     );
   }
 
-  List<LineChartBarData> _getLineBarsData(List<HealthRecord> records) {
-    final reversed = records.reversed.toList();
+  // 선 굵기 조절 (barWidth: 2) 및 항상 떠있는 툴팁 적용
+  List<LineChartBarData> _getLineBarsData(
+    List<HealthRecord> reversedRecords, int maxSugarIdx, int minSugarIdx, int maxSysIdx, int minDiaIdx
+  ) {
     if (_chartType == '혈당') {
       return [
         LineChartBarData(
-          spots: List.generate(reversed.length, (i) => FlSpot(i.toDouble(), reversed[i].sugar.toDouble())),
+          spots: List.generate(reversedRecords.length, (i) => FlSpot(i.toDouble(), reversedRecords[i].sugar.toDouble())),
           isCurved: true,
           color: const Color(0xFF0052CC),
-          barWidth: 5,
-          dotData: const FlDotData(show: true),
+          barWidth: 2, // 선을 얇게 조정
+          dotData: const FlDotData(show: true), 
           belowBarData: BarAreaData(show: true, color: const Color(0xFF0052CC).withOpacity(0.1)),
+          showingIndicators: {maxSugarIdx, minSugarIdx}.toList(), 
         )
       ];
     } else {
-      // 혈압은 수축기/이완기 두 줄 표시
       return [
         LineChartBarData(
-          spots: List.generate(reversed.length, (i) => FlSpot(i.toDouble(), (reversed[i].systolic ?? 0).toDouble())),
+          spots: List.generate(reversedRecords.length, (i) => FlSpot(i.toDouble(), (reversedRecords[i].systolic ?? 0).toDouble())),
+          isCurved: true,
           color: Colors.orange,
-          barWidth: 4,
+          barWidth: 2, // 선을 얇게 조정
           dotData: const FlDotData(show: true),
+          showingIndicators: {maxSysIdx}.toList(),
         ),
         LineChartBarData(
-          spots: List.generate(reversed.length, (i) => FlSpot(i.toDouble(), (reversed[i].diastolic ?? 0).toDouble())),
+          spots: List.generate(reversedRecords.length, (i) => FlSpot(i.toDouble(), (reversedRecords[i].diastolic ?? 0).toDouble())),
+          isCurved: true,
           color: Colors.blue,
-          barWidth: 4,
+          barWidth: 2, // 선을 얇게 조정
           dotData: const FlDotData(show: true),
+          showingIndicators: {minDiaIdx}.toList(),
         ),
       ];
     }
@@ -168,11 +331,34 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _buildSummaryFeedback(List<HealthRecord> records) {
     if (records.isEmpty) return const SizedBox();
     
-    // 평균 수치 계산
-    double avgSugar = records.map((r) => r.sugar).reduce((a, b) => a + b) / records.length;
-    
-    // [v1.5 규칙] 18px 이상 폰트 및 상태별 컬러 피드백
-    Color themeColor = avgSugar > 140 ? Colors.red.shade800 : const Color(0xFF0052CC);
+    Color themeColor;
+    String summaryText;
+
+    if (_chartType == '혈당') {
+      double avgSugar = records.map((r) => r.sugar).reduce((a, b) => a + b) / records.length;
+      if (avgSugar > 140) {
+        themeColor = Colors.red.shade800;
+        summaryText = "평균 혈당이 다소 높습니다.\n식단 관리에 조금 더 신경 써주세요! 🥗";
+      } else {
+        themeColor = const Color(0xFF0052CC);
+        summaryText = "안정적으로 잘 관리하고 계십니다.\n지금처럼만 유지하세요! 👍";
+      }
+    } else {
+      final bpRecords = records.where((r) => r.systolic != null && r.diastolic != null).toList();
+      
+      if (bpRecords.isEmpty) return const SizedBox(); 
+
+      double avgSys = bpRecords.map((r) => r.systolic!).reduce((a, b) => a + b) / bpRecords.length;
+      double avgDia = bpRecords.map((r) => r.diastolic!).reduce((a, b) => a + b) / bpRecords.length;
+
+      if (avgSys >= 140 || avgDia >= 90) {
+        themeColor = Colors.red.shade800;
+        summaryText = "평균 혈압이 다소 높습니다.\n안정을 취하고 무리하지 마세요! 🧘‍♂️";
+      } else {
+        themeColor = const Color(0xFF047857); 
+        summaryText = "혈압이 정상 범위에 있습니다.\n아주 잘 관리하고 계시네요! 👏";
+      }
+    }
 
     return Container(
       width: double.infinity,
@@ -185,12 +371,10 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("나의 $_timeRange 요약", style: TextStyle(color: themeColor, fontSize: 18, fontWeight: FontWeight.bold)),
+          Text("나의 $_timeRange 요약 ($_chartType)", style: TextStyle(color: themeColor, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Text(
-            avgSugar > 140 
-              ? "평균 혈당이 다소 높습니다. 식단 관리에 조금 더 신경 써주세요! 🥗"
-              : "안정적으로 잘 관리하고 계십니다. 지금처럼만 유지하세요! 👍",
+            summaryText,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, height: 1.4),
           ),
         ],
@@ -198,7 +382,6 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  // --- 데이터 필터 로직 ---
   List<HealthRecord> _filterRecordsByRange(List<HealthRecord> records) {
     final now = DateTime.now();
     return records.where((r) {

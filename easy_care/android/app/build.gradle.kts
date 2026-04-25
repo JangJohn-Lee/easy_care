@@ -7,7 +7,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// 1. local.properties에서 키를 읽어오기 위한 로직 추가
+// 1. 로컬 보안키 설정 (카카오 로그인 등)
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
@@ -16,7 +16,6 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace = "com.example.easy_care"
-    // 권장에 따라 36 유지 (최신 SDK)
     compileSdk = 36 
 
     compileOptions {
@@ -30,23 +29,19 @@ android {
 
     defaultConfig {
         applicationId = "com.example.easy_care"
-        
-        // Firestore 및 최신 라이브러리 호환성을 위해 유지
         minSdk = flutter.minSdkVersion 
         targetSdk = 36 
         
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // 2. AndroidManifest.xml에서 사용할 변수 등록 (v1.6 보안 규칙)
-        // local.properties에 정의된 kakaoNativeAppKey를 매니페스트로 넘겨줍니다.
+        // 카카오 네이티브 키 설정 (RULES.md 보안 규칙 준수) [cite: 3, 4]
         val kakaoKey = localProperties.getProperty("kakaoNativeAppKey") ?: ""
         manifestPlaceholders["kakaoNativeAppKey"] = kakaoKey
     }
 
     buildTypes {
         release {
-            // 프로젝트 완성 후에는 실제 릴리즈 키로 변경이 필요합니다.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -54,4 +49,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// --- 이 부분이 추가된 핵심 내용입니다 ---
+dependencies {
+    // 한국어 OCR 인식 모델 엔진 (v1.6 필수 사항) 
+    implementation("com.google.mlkit:text-recognition-korean:16.0.0")
 }
