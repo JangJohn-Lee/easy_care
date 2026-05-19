@@ -55,13 +55,14 @@
   - 연결된 가족 리스트 및 가족 코드 입력 초대 UI 구축
   - `dashboard_screen.dart`의 '가족 연결' 메뉴에서 해당 화면으로 라우팅 연결
 
-## 11. Step 7 가족 연결 고도화 및 상태 관리 적용
-- **가족 연결 기능 (`family_screen.dart`) 업데이트**:
-  - `StatelessWidget`에서 `StatefulWidget`으로 변경하여 가족 목록 및 연결 상태 관리.
-  - `SharedPreferences`를 활용하여 고유 가족 초대 코드 임의 생성 및 로컬 스토리지 유지.
-  - 가족 초대 코드 입력 다이얼로그 추가 및 동적 리스트 추가/삭제 기능 구현.
-  - 연결 해제 확인을 위한 경고 다이얼로그(Double Check) 구현.
-  - `RULES.md` 공통 디자인 시스템 적용:
-    - 터치 피드백 `AnimatedScale(scale: 0.95)` 반영 (가족 추가 버튼).
-    - 테두리 곡률(Border Radius) 통일 (상단 카드 32px, 하단 목록 28px).
-    - 해제 버튼에 Danger 색상(`Colors.red.shade800`) 적용.
+## 11. Step 7 가족 연결 UI 고도화 및 디자인 원칙(RULES.md) 전면 적용
+- **가족 연결 기능 (`family_screen.dart`) 완벽 구현**:
+  - `SharedPreferences`를 활용하여 6자리 영문/숫자 혼합 고유 가족 초대 코드 임의 생성 및 유지 로직 구현.
+  - `flutter/services.dart`의 `ClipboardData`를 활용하여 내 연결 코드 클립보드 복사 기능 및 스낵바 알림 추가.
+  - 가족 초대 코드 입력 다이얼로그 추가 및 연결된 가족 리스트 상태(동적 추가/삭제) 관리.
+  - 삭제 시 실수 방지를 위한 'Double Check' 경고 다이얼로그 추가.
+  - `RULES.md` 공통 디자인 시스템 전면 반영:
+    - **Primary Color:** 화면 전체 테마(배경, 아이콘, 타이틀 등)에 메인 색상(`Color(0xFF0052CC)`) 통일 적용.
+    - **터치 영역 및 가독성:** 모든 터치 가능한 요소의 최소 영역을 `60px`(`minimumSize`, `BoxConstraints` 활용)로 확보하고, 본문 폰트 최소 사이즈를 `18px`(제목 `22px` 이상)로 상향.
+    - **인터랙션 및 곡률:** 터치 피드백을 위한 `AnimatedScale(scale: 0.95)` 반영. 대시보드 카드 `32px`, 메뉴 카드 및 리스트 `28px`, 기본 버튼 `16px` 모서리 곡률 통일.
+    - **위험 상태 색상:** 가족 연결 해제 버튼 및 팝업 확인 버튼에 Danger 색상(`Colors.red.shade800`) 적용.
