@@ -19,6 +19,7 @@ android {
     compileSdk = 36 
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
@@ -53,6 +54,7 @@ flutter {
 
 // --- 이 부분이 추가된 핵심 내용입니다 ---
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     // 한국어 OCR 인식 모델 엔진 (v1.6 필수 사항) 
     implementation("com.google.mlkit:text-recognition-korean:16.0.0")
 }

@@ -10,6 +10,7 @@ class HealthRecord {
   final int? diastolic;
   final String memo;
   final DateTime timestamp;
+  final String? creatorCode; // 가족 연동을 위한 식별 코드
 
   HealthRecord({
     required this.id,
@@ -19,6 +20,7 @@ class HealthRecord {
     this.diastolic,
     required this.memo,
     required this.timestamp,
+    this.creatorCode,
   });
 
   // 1. Firestore 데이터를 객체로 변환 (불러오기용)
@@ -32,6 +34,7 @@ class HealthRecord {
       diastolic: (data['diastolic'] as num?)?.toInt(),
       memo: data['memo'] ?? '',
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      creatorCode: data['creatorCode'],
     );
   }
 
@@ -43,6 +46,7 @@ class HealthRecord {
       'diastolic': diastolic,
       'memo': memo,
       'timestamp': FieldValue.serverTimestamp(),
+      'creatorCode': creatorCode,
     };
   }
 

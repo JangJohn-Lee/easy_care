@@ -18,23 +18,31 @@ class ModernDashboard extends StatefulWidget {
 
 class _ModernDashboardState extends State<ModernDashboard> {
   String _userName = '사용자';
+  String? _myCode;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUserName();
+    _loadUserData();
   }
 
-  Future<void> _loadUserName() async {
+  Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _userName = prefs.getString('userName') ?? '사용자';
+      _myCode = prefs.getString('myFamilyCode');
+      _isLoading = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -49,18 +57,29 @@ class _ModernDashboardState extends State<ModernDashboard> {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('health_records')
-            .orderBy('timestamp', descending: true)
-            .limit(1)
-            .snapshots(),
+              .collection('health_records')
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text("오류: ${snapshot.error}"));
+          }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           HealthRecord? lastRecord;
           if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-            lastRecord = HealthRecord.fromFirestore(snapshot.data!.docs.first);
+            final docs = snapshot.data!.docs;
+            final myDocs = docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final code = data['creatorCode'];
+              return _myCode == null || _myCode!.isEmpty || code == null || code == _myCode;
+            }).toList();
+
+            if (myDocs.isNotEmpty) {
+              lastRecord = HealthRecord.fromFirestore(myDocs.first);
+            }
           }
 
           // [v1.5 규칙] 통합 진단 로직 활용

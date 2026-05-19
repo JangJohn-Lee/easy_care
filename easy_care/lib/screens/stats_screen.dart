@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/health_stat.dart';
 
 class StatsScreen extends StatefulWidget {
@@ -18,20 +24,125 @@ class _StatsScreenState extends State<StatsScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
+  List<String> _allowedCodes = [];
+  bool _isLoadingCodes = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFamilyCodes();
+  }
+
+  Future<void> _loadFamilyCodes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final myCode = prefs.getString('myFamilyCode');
+    final familyJson = prefs.getString('familyMembers');
+
+    List<String> codes = [];
+    if (myCode != null && myCode.isNotEmpty) {
+      codes.add(myCode);
+    }
+    if (familyJson != null) {
+      final List<dynamic> familyList = json.decode(familyJson);
+      for (var f in familyList) {
+        if (f['code'] != null) {
+          codes.add(f['code']);
+        }
+      }
+    }
+    
+    // Firestore 'whereIn' supports up to 10 items.
+    if (codes.length > 10) {
+      codes = codes.sublist(0, 10);
+    }
+
+    setState(() {
+      _allowedCodes = codes;
+      _isLoadingCodes = false;
+    });
+  }
+
+  Future<void> _exportReport() async {
+    final dateRange = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF0052CC),
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (dateRange == null) return;
+
+    if (!mounted) return;
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('health_records').orderBy('timestamp', descending: true).get();
+      final allRecords = snapshot.docs
+          .map((doc) => HealthRecord.fromFirestore(doc))
+          .where((r) => _allowedCodes.isEmpty || r.creatorCode == null || _allowedCodes.contains(r.creatorCode))
+          .toList();
+
+      final targetRecords = allRecords.where((r) {
+        return r.timestamp.isAfter(dateRange.start.subtract(const Duration(seconds: 1))) &&
+               r.timestamp.isBefore(dateRange.end.add(const Duration(days: 1)));
+      }).toList();
+
+      if (targetRecords.isEmpty) {
+        if (mounted) Navigator.pop(context);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('해당 기간에 데이터가 없습니다.')));
+        return;
+      }
+
+      List<String> rows = [];
+      rows.add("일시,구분,혈당(mg/dL),혈압(수축기/이완기),메모"); // 헤더
+
+      for (var r in targetRecords) {
+        String dateStr = DateFormat('yyyy-MM-dd HH:mm').format(r.timestamp);
+        String bpStr = r.systolic != null && r.diastolic != null ? '${r.systolic}/${r.diastolic}' : '미측정';
+        String memoSafe = '"${r.memo.replaceAll('"', '""')}"';
+        rows.add("$dateStr,${r.type},${r.sugar},$bpStr,$memoSafe");
+      }
+
+      String csv = rows.join("\n");
+      List<int> bytes = [0xEF, 0xBB, 0xBF] + utf8.encode(csv); // UTF-8 BOM
+
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/easycare_report.csv');
+      await file.writeAsBytes(bytes);
+
+      if (mounted) Navigator.pop(context);
+      if (mounted) await Share.shareXFiles([XFile(file.path)], text: '건강 분석 리포트');
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('리포트 추출 실패: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_isLoadingCodes) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('건강 분석 리포트', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('리포트 추출 기능은 준비중입니다 (Excel/PDF)')),
-              );
-            },
+            onPressed: _exportReport,
             icon: const Icon(Icons.download_rounded),
           ),
           IconButton(
@@ -46,10 +157,12 @@ class _StatsScreenState extends State<StatsScreen> {
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) return Center(child: Text("오류가 발생했습니다.\n${snapshot.error}"));
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
           final allRecords = snapshot.data!.docs
               .map((doc) => HealthRecord.fromFirestore(doc))
+              .where((r) => _allowedCodes.isEmpty || r.creatorCode == null || _allowedCodes.contains(r.creatorCode))
               .toList();
 
           if (allRecords.isEmpty) return const Center(child: Text("기록된 데이터가 없습니다."));

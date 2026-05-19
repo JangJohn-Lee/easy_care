@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 // 정확한 모델 경로 및 클래스명(HealthRecord) 사용
 import '../models/health_stat.dart'; 
 import '../services/notification_service.dart';
@@ -113,6 +114,9 @@ class _InputScreenState extends State<InputScreen> {
       return;
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final myCode = prefs.getString('myFamilyCode');
+
     // HealthRecord 객체 생성
     final record = HealthRecord(
       id: '', 
@@ -122,6 +126,7 @@ class _InputScreenState extends State<InputScreen> {
       diastolic: int.tryParse(_diaController.text),
       memo: _memoController.text,
       timestamp: DateTime.now(),
+      creatorCode: myCode,
     );
 
     // 저장 전 확인 다이얼로그 (진단 문구 포함 수정본)
@@ -217,20 +222,19 @@ class _InputScreenState extends State<InputScreen> {
             // 측정 시점 선택
             const Text("언제 측정하셨나요?", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            Row(
-              children: ['공복', '식전', '식후'].map((type) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      child: Text(type, style: const TextStyle(fontSize: 18)),
-                    ),
-                    selected: _selectedType == type,
-                    onSelected: (val) => setState(() => _selectedType = type),
-                    selectedColor: const Color(0xFF0052CC),
-                    labelStyle: TextStyle(color: _selectedType == type ? Colors.white : Colors.black),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: ['공복', '식전', '식후', '취침전'].map((type) {
+                return ChoiceChip(
+                  label: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    child: Text(type, style: const TextStyle(fontSize: 18)),
                   ),
+                  selected: _selectedType == type,
+                  onSelected: (val) => setState(() => _selectedType = type),
+                  selectedColor: const Color(0xFF0052CC),
+                  labelStyle: TextStyle(color: _selectedType == type ? Colors.white : Colors.black),
                 );
               }).toList(),
             ),

@@ -66,3 +66,23 @@
     - **터치 영역 및 가독성:** 모든 터치 가능한 요소의 최소 영역을 `60px`(`minimumSize`, `BoxConstraints` 활용)로 확보하고, 본문 폰트 최소 사이즈를 `18px`(제목 `22px` 이상)로 상향.
     - **인터랙션 및 곡률:** 터치 피드백을 위한 `AnimatedScale(scale: 0.95)` 반영. 대시보드 카드 `32px`, 메뉴 카드 및 리스트 `28px`, 기본 버튼 `16px` 모서리 곡률 통일.
     - **위험 상태 색상:** 가족 연결 해제 버튼 및 팝업 확인 버튼에 Danger 색상(`Colors.red.shade800`) 적용.
+
+## 12. 안드로이드 빌드 환경 수정 (`android/app/build.gradle.kts`)
+- `flutter_local_notifications` 패키지 요구사항 충족 및 의존성 충돌 해결을 위해 `coreLibraryDesugaring`에 사용되는 `desugar_jdk_libs` 버전을 `2.1.4`에서 `2.1.5`로 상향 적용하여 안드로이드 앱 빌드 오류 해결.
+
+## 13. 가족 연결 기능 고도화 (데이터 공유 및 메모 기능)
+- **가족 연결 (`family_screen.dart`)**:
+  - 가족 코드 등록 시 식별용 '메모(별칭)' 입력 다이얼로그 추가.
+  - 리스트에서 연필(Edit) 아이콘을 눌러 메모 내용을 언제든 수정 가능하도록 구현.
+  - 가족 리스트 상태를 `SharedPreferences`를 사용해 로컬 기기에 JSON 형태로 영구 보존하도록 연동.
+- **데이터 모델 및 입력 (`health_stat.dart`, `input_screen.dart`)**:
+  - `HealthRecord` 데이터 모델에 `creatorCode` 속성을 추가.
+  - Firestore에 기록을 저장할 때, 내 가족 코드(`myFamilyCode`)를 함께 담아 업로드하도록 로직 수정.
+- **통계 및 대시보드 (`stats_screen.dart`, `dashboard_screen.dart`)**:
+  - `stats_screen.dart`에서 화면 진입 시 내 코드와 연결된 가족들의 코드를 배열로 묶어 Firestore에 `whereIn` 조건으로 질의하도록 변경하여, 가족들의 기록을 캘린더와 차트에 병합 노출. (이후 로컬 필터링으로 수정하여 색인 문제 해결)
+  - `dashboard_screen.dart`에서는 메인 대시보드 성격에 맞게 내 코드(`myFamilyCode`) 데이터만 필터링하여 노출하도록 수정.
+
+## 14. 데이터 내보내기 (Excel 리포트 추출) 기능 구현
+- `excel`, `path_provider`, `share_plus` 패키지 추가.
+- `stats_screen.dart`에 기간 설정(`showDateRangePicker`)을 통한 리포트 추출 UI 추가.
+- 선택된 기간의 데이터를 '일시', '구분', '혈당', '혈압(수축기/이완기)', '메모' 컬럼을 갖춘 엑셀(`.xlsx`) 파일로 생성하고, OS 기본 공유 기능을 통해 내보낼 수 있도록 구현.
