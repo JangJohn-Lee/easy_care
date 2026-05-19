@@ -4,8 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// [v1.6 규칙 준수] 모든 화면에서 동일하게 사용하는 의학적 진단 엔진
 class HealthRecord {
   final String id;
-  final String mealType; // 아침, 점심, 저녁, 야식, 취침전
-    final String stepType; // 공복, 식전, 식후, 해당없음
+  final String type; // 공복, 식전, 식후
   final int sugar;
   final int? systolic;
   final int? diastolic;
@@ -36,11 +35,9 @@ class HealthRecord {
     );
   }
 
-// toMap() 수정
   Map<String, dynamic> toMap() {
     return {
-      'mealType': mealType,
-      'stepType': stepType,
+      'type': type,
       'sugar': sugar,
       'systolic': systolic,
       'diastolic': diastolic,
@@ -49,34 +46,38 @@ class HealthRecord {
     };
   }
 
-  // --- 의학적 상태 진단 로직 (v1.6 핵심) ---
+  // --- 의학적 상태 진단 로직 (v1.7 핵심) ---
 
   /// 혈당 상태 진단
   Map<String, dynamic> get sugarStatus {
-    if (sugar <= 0)
+    if (sugar <= 0) {
       return {"label": "기록 없음", "color": Colors.grey, "msg": "수치를 입력해주세요."};
+    }
 
     // 저혈당 기준 (70 미만)
-    if (sugar < 70)
+    if (sugar < 70) {
       return {
         "label": "저혈당",
         "color": Colors.orange.shade800,
         "msg": "당분 섭취가 시급합니다! 🍊",
       };
+    }
 
     if (type == '공복') {
-      if (sugar >= 126)
+      if (sugar >= 126) {
         return {
           "label": "고혈당(당뇨)",
           "color": Colors.red.shade800,
           "msg": "정밀 검진이 필요합니다. ⚠️",
         };
-      if (sugar >= 100)
+      }
+      if (sugar >= 100) {
         return {
           "label": "공복혈당장애",
           "color": Colors.orange,
           "msg": "주의가 필요한 단계입니다.",
         };
+      }
       return {
         "label": "정상",
         "color": const Color(0xFF0052CC),
@@ -84,18 +85,20 @@ class HealthRecord {
       };
     } else {
       // 식전/식후 기준 (140, 200)
-      if (sugar >= 200)
+      if (sugar >= 200) {
         return {
           "label": "고혈당",
           "color": Colors.red.shade800,
           "msg": "즉시 활동을 줄이고 휴식하세요.",
         };
-      if (sugar >= 140)
+      }
+      if (sugar >= 140) {
         return {
           "label": "식후혈당 높음",
           "color": Colors.orange,
           "msg": "식단 관리에 유의하세요.",
         };
+      }
       return {
         "label": "정상",
         "color": const Color(0xFF0052CC),

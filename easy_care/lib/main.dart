@@ -4,6 +4,7 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // 1. dotenv 임포트 추가
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   // Flutter 엔진 초기화 확인
@@ -16,6 +17,9 @@ void main() async {
     // .env 파일이 없을 경우 대비 (에러 로그 출력)
     debugPrint("Warning: .env file not found. Make sure it exists in the root directory.");
   }
+
+  // 알림 서비스 초기화
+  await NotificationService().init();
 
   // 3. 카카오 SDK 초기화 (직접 쓴 키 대신 환경 변수 사용)
   // [보안] 깃허브에는 키가 올라가지 않도록 처리됨

@@ -27,6 +27,14 @@ class _StatsScreenState extends State<StatsScreen> {
         title: const Text('건강 분석 리포트', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('리포트 추출 기능은 준비중입니다 (Excel/PDF)')),
+              );
+            },
+            icon: const Icon(Icons.download_rounded),
+          ),
+          IconButton(
             onPressed: () => setState(() => _isCalendarView = !_isCalendarView),
             icon: Icon(_isCalendarView ? Icons.show_chart_rounded : Icons.calendar_month_rounded),
           ),
@@ -426,11 +434,24 @@ class _StatsScreenState extends State<StatsScreen> {
               child: ListView.builder(
                 shrinkWrap: true,
                 itemCount: dayRecords.length,
-                itemBuilder: (context, i) => ListTile(
-                  leading: Icon(Icons.circle, color: dayRecords[i].sugarStatus['color'], size: 12),
-                  title: Text("혈당: ${dayRecords[i].sugar} / 혈압: ${dayRecords[i].systolic ?? '--'}/${dayRecords[i].diastolic ?? '--'}"),
-                  subtitle: Text("${dayRecords[i].type} 기록 - ${dayRecords[i].memo}"),
-                ),
+                itemBuilder: (context, i) {
+                  final record = dayRecords[i];
+                  return ListTile(
+                    leading: Icon(Icons.circle, color: record.sugarStatus['color'], size: 12),
+                    title: RichText(
+                      text: TextSpan(
+                        style: DefaultTextStyle.of(context).style.copyWith(fontSize: 16),
+                        children: [
+                          const TextSpan(text: "혈당: "),
+                          TextSpan(text: "${record.sugar}", style: TextStyle(color: record.sugarStatus['color'], fontWeight: FontWeight.bold)),
+                          const TextSpan(text: " / 혈압: "),
+                          TextSpan(text: "${record.systolic ?? '--'}/${record.diastolic ?? '--'}", style: TextStyle(color: record.bloodPressureStatus['color'], fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                    subtitle: Text("${record.type} | 메모: ${record.memo.isEmpty ? '없음' : record.memo}", style: const TextStyle(fontSize: 14)),
+                  );
+                },
               ),
             ),
           ],

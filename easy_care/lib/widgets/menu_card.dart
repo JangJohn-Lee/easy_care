@@ -68,7 +68,7 @@ class _MenuCardState extends State<MenuCard> {
                 widget.title,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 19, // [규칙 1] 어르신 친화 18px 이상 상향
+                  fontSize: 22, // [규칙 1] 중요 수치 bold 및 22px+ 적용
                   letterSpacing: -0.5,
                 ),
               ),

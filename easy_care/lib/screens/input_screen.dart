@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 // 정확한 모델 경로 및 클래스명(HealthRecord) 사용
 import '../models/health_stat.dart'; 
+import '../services/notification_service.dart';
 
 class InputScreen extends StatefulWidget {
   const InputScreen({super.key});
@@ -73,11 +74,17 @@ class _InputScreenState extends State<InputScreen> {
         setState(() {
           if (numbers.length == 1) {
             _sugarController.text = numbers[0].toString();
+          } else if (numbers.length == 2) {
+            _sugarController.text = numbers.firstWhere((n) => n > 20 && n < 300, orElse: () => numbers[0]).toString();
           } else {
             if (fullText.contains('혈압')) {
-              numbers.sort((a, b) => b.compareTo(a)); // 큰 수: 수축기
-              _sysController.text = numbers[0].toString();
-              _diaController.text = numbers[1].toString();
+              List<int> bpCandidates = List.from(numbers);
+              bpCandidates.sort((a, b) => b.compareTo(a)); 
+              _sysController.text = bpCandidates[0].toString();
+              _diaController.text = bpCandidates[1].toString();
+              if (fullText.contains('혈당') && numbers.length > 2) {
+                _sugarController.text = bpCandidates[2].toString();
+              }
             } else {
               _sugarController.text = numbers[0].toString();
             }
@@ -164,6 +171,17 @@ class _InputScreenState extends State<InputScreen> {
     try {
       // toMap()을 활용한 Firestore 저장
       await FirebaseFirestore.instance.collection('health_records').add(record.toMap());
+      
+      // 식전 기록인 경우 식후 2시간 푸시 알람 스케줄링
+      if (record.type == '식전') {
+        await NotificationService().scheduleMealAlarm(mealType: '점심/저녁'); 
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('저장 완료! 식후 2시간 뒤 알림이 설정되었습니다.'))
+          );
+        }
+      }
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
@@ -186,7 +204,7 @@ class _InputScreenState extends State<InputScreen> {
               child: OutlinedButton.icon(
                 onPressed: _processOCR,
                 icon: const Icon(Icons.camera_alt, size: 28),
-                label: const Text('사진으로 자동 입력', 
+                label: const Text('사진 촬영 / 재촬영', 
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Color(0xFF0052CC), width: 2),

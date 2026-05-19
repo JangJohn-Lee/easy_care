@@ -1,13 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/health_stat.dart'; 
 import '../widgets/menu_card.dart';
 import 'input_screen.dart';
 import 'stats_screen.dart';
+import 'my_page_screen.dart';
+import 'family_screen.dart';
 
-class ModernDashboard extends StatelessWidget {
+class ModernDashboard extends StatefulWidget {
   final VoidCallback onThemeToggle;
   const ModernDashboard({super.key, required this.onThemeToggle});
+
+  @override
+  State<ModernDashboard> createState() => _ModernDashboardState();
+}
+
+class _ModernDashboardState extends State<ModernDashboard> {
+  String _userName = '사용자';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserName();
+  }
+
+  Future<void> _loadUserName() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userName = prefs.getString('userName') ?? '사용자';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +41,7 @@ class ModernDashboard extends StatelessWidget {
         title: const Text('혈당도우미', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            onPressed: onThemeToggle,
+            onPressed: widget.onThemeToggle,
             icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
           ),
           const SizedBox(width: 8),
@@ -55,9 +78,9 @@ class ModernDashboard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "안녕하세요,\n현민님! 👋",
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, height: 1.2),
+                Text(
+                  "안녕하세요,\n$_userName님! 👋",
+                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, height: 1.2),
                 ),
                 const SizedBox(height: 24),
                 
@@ -109,14 +132,14 @@ class ModernDashboard extends StatelessWidget {
                       // --- [규칙 3] bpInfo를 활용한 혈압 진단 표시 ---
                       Row(
                         children: [
-                          const Icon(Icons.favorite_rounded, color: Colors.white70, size: 22),
+                          const Icon(Icons.favorite_rounded, color: Colors.white70, size: 38),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               lastRecord?.systolic != null 
                                   ? "혈압: ${lastRecord!.systolic}/${lastRecord.diastolic} (${bpInfo!['label']})"
                                   : "혈압: 기록 없음",
-                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+                              style: const TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w600),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -173,13 +196,19 @@ class ModernDashboard extends StatelessWidget {
                       title: "가족연결", 
                       icon: Icons.family_restroom_rounded, 
                       color: const Color(0xFF047857), 
-                      onTap: () {} 
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const FamilyScreen()),
+                      ),
                     ),
                     MenuCard(
-                      title: "로그아웃", 
-                      icon: Icons.logout_rounded, 
+                      title: "마이페이지", 
+                      icon: Icons.person_rounded, 
                       color: const Color(0xFF374151), 
-                      onTap: () => Navigator.pop(context),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => MyPageScreen(onThemeToggle: widget.onThemeToggle)),
+                      ),
                     ),
                   ],
                 ),
