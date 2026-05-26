@@ -86,3 +86,10 @@
 - `excel`, `path_provider`, `share_plus` 패키지 추가.
 - `stats_screen.dart`에 기간 설정(`showDateRangePicker`)을 통한 리포트 추출 UI 추가.
 - 선택된 기간의 데이터를 '일시', '구분', '혈당', '혈압(수축기/이완기)', '메모' 컬럼을 갖춘 엑셀(`.xlsx`) 파일로 생성하고, OS 기본 공유 기능을 통해 내보낼 수 있도록 구현.
+
+## 15. iOS 플랫폼 지원 설정 (v1.9)
+- **`AppDelegate.swift` 업데이트**: `flutter_local_notifications` 패키지의 푸시 알람 수신을 위한 `UNUserNotificationCenter` 델리게이트 초기화 설정 추가.
+- **`Podfile` 설정 업데이트**:
+  - `GoogleMLKit/TextRecognitionKorean` Pod 의존성을 명시하여 iOS 기기에서도 한국어 OCR이 정상 동작하도록 지원.
+  - 카카오 로그인 시 필요한 `KAKAO_NATIVE_APP_KEY`를 소스코드에 하드코딩하지 않고 `.env` 파일에서 읽어와 Xcode 빌드 설정(`xcconfig`)에 동적 주입하도록 Ruby 스크립트 작성.
+- **가이드 문서 갱신 (`AGENTS.md`, `RULES.md`)**: iOS 플랫폼 빌드 및 환경변수 주입 관련 아키텍처 규칙 추가 반영.

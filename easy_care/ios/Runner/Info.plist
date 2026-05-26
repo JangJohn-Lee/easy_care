@@ -24,16 +24,17 @@
     <string>$(FLUTTER_BUILD_NUMBER)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
-    <!-- [OCR/카메라 권한] -->
+
     <key>NSCameraUsageDescription</key>
     <string>어르신의 혈당 및 혈압 수치를 자동으로 인식하기 위해 카메라 권한이 필요합니다.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>저장된 건강 기록 사진을 불러오기 위해 사진첩 접근 권한이 필요합니다.</string>
-    <!-- [카카오 로그인 설정] -->
+
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>kakaokompassauth</string>
         <string>kakaolink</string>
+        <string>kakaoplus</string>
     </array>
     <key>CFBundleURLTypes</key>
     <array>
@@ -42,13 +43,27 @@
             <string>Editor</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>kakao${KAKAO_NATIVE_APP_KEY}</string>
+                <string>kakao$(KAKAO_NATIVE_APP_KEY)</string>
             </array>
         </dict>
     </array>
+
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>
     </array>
+
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+    <key>CADisableMinimumFrameDurationOnPhone</key>
+    <true/>
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
 </dict>
 </plist>

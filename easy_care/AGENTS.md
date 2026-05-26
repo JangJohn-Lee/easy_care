@@ -58,3 +58,8 @@
 
 ### 6. 안드로이드 플랫폼 설정 (`android/`)
 - **`app/build.gradle.kts`**: 안드로이드 앱 전용 빌드 설정 파일. 카카오 네이티브 앱 키 설정 및 `flutter_local_notifications` 요구사항을 충족하기 위한 `desugar_jdk_libs` 최신 버전(2.1.5 등) 명시적 관리, 한국어 OCR 모델 의존성 등이 정의되어 있습니다.
+
+### 7. iOS 플랫폼 설정 (`ios/`)
+- **`Runner/AppDelegate.swift`**: iOS 앱 생명주기 관리 및 플러그인 초기화. `flutter_local_notifications` 동작을 위한 `UNUserNotificationCenter` 델리게이트가 설정되어 있습니다.
+- **`Podfile`**: iOS 패키지 의존성 관리 파일. Google ML Kit 한국어 모델 (`GoogleMLKit/TextRecognitionKorean`)이 명시되어 있으며, `.env` 파일의 `KAKAO_NATIVE_APP_KEY`를 파싱하여 카카오 로그인 URL 스킴에 동적으로 주입하는 빌드 스크립트가 포함되어 있습니다.
+- **`Runner/Info.plist`**: iOS 앱 권한 및 메타데이터 설정. 카메라/사진첩 접근 권한, 카카오 로그인 앱 실행 스킴(kakaokompassauth 등) 및 백그라운드 원격 알림 등이 정의되어 있습니다.

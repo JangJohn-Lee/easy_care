@@ -5,4 +5,31 @@ target 'Runner' do
   use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  # [iOS 지원] 한국어 OCR 인식 모델 엔진
+  pod 'GoogleMLKit/TextRecognitionKorean'
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+
+  # [iOS 지원] .env 파일에서 KAKAO_NATIVE_APP_KEY를 읽어 Info.plist에서 사용할 수 있게 설정
+  env_file = File.join(File.dirname(__FILE__), '..', '.env')
+  if File.exist?(env_file)
+    env_content = File.read(env_file)
+    kakao_key_match = env_content.match(/KAKAO_NATIVE_APP_KEY=(.*)/)
+    if kakao_key_match
+      kakao_key = kakao_key_match[1].strip
+      installer.pods_project.build_configurations.each do |config|
+        config.build_settings['KAKAO_NATIVE_APP_KEY'] = kakao_key
+      end
+      installer.pods_project.targets.each do |target|
+        target.build_configurations.each do |config|
+          config.build_settings['KAKAO_NATIVE_APP_KEY'] = kakao_key
+        end
+      end
+    end
+  end
 end

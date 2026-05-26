@@ -46,7 +46,7 @@
 - **Auth:** 회원가입, 로그인, 로그아웃 등 인증 흐름을 명확히 관리해야 함. 로그아웃 시 세션 초기화 및 초기 진입점으로 강제 이동.
 - **회원탈퇴:** 탈퇴 요청 시, 해당 사용자와 관련된 모든 개인 데이터(혈당/혈압 기록, 메모 등)는 **Firebase에서 완전히 삭제**되어야 함.
 - **인프라:** Firebase Cloud Firestore (asia-northeast3).
-- **빌드 및 의존성:** 패키지 간 의존성 충돌(예: `flutter_local_notifications`의 `desugar_jdk_libs` 버전 문제 등) 방지를 위해 네이티브 빌드 파일(`build.gradle.kts` 등)의 라이브러리 버전을 명시적으로 관리함.
+- **빌드 및 의존성:** 패키지 간 의존성 충돌 방지를 위해 안드로이드의 `build.gradle.kts`(`desugar_jdk_libs` 등) 및 iOS의 `Podfile`(`GoogleMLKit/TextRecognitionKorean` 등)과 같은 네이티브 빌드 파일의 라이브러리 버전을 명시적으로 관리함.
 
 ## 5. 공통 디자인 시스템 및 코드 컨벤션
 - **주요 색상 (Color Palette):**
@@ -63,4 +63,4 @@
   - **타이포그래피:** `displayLarge` 32px, `titleLarge` 22px, `bodyLarge` 18px 기준 준수. 아이콘 내부 원형 배경 적용으로 시인성 강화.
 - **데이터 모델 및 아키텍처:**
   - **진단 로직 포맷:** 의학적 진단 반환값은 `Map<String, dynamic>` 타입으로 `{"label", "color", "msg"}` 형태를 통일하여 UI와 모델의 결합을 최소화.
-  - **보안/환경 변수:** 카카오 SDK 등 API 키는 절대 소스코드 내 하드코딩하지 않고, 최우선적으로 `flutter_dotenv`를 활용하여 `.env`에서 불러오기 수행.
+  - **보안/환경 변수:** 카카오 SDK 등 API 키는 절대 소스코드 내 하드코딩하지 않고, 최우선적으로 `flutter_dotenv`를 활용하여 `.env`에서 불러오기 수행 (iOS의 경우 `Podfile` 빌드 스크립트를 통해 `.env`에서 파싱하여 `Info.plist`에 동적 주입).
