@@ -1,7 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // kIsWeb 사용을 위해 추가
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -11,6 +11,8 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
+    if (kIsWeb) return; // 웹에서는 알림 기능을 초기화하지 않음
+
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
 
@@ -31,6 +33,8 @@ class NotificationService {
 
   // 즉시 알림 테스트용
   Future<void> showNotification({required int id, required String title, required String body}) async {
+    if (kIsWeb) return;
+
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'easy_care_channel', 
       'EasyCare 알림', 
@@ -51,6 +55,8 @@ class NotificationService {
 
   // 식후 2시간(또는 특정 시간 뒤) 알람 스케줄링
   Future<void> scheduleMealAlarm({required String mealType}) async {
+    if (kIsWeb) return; // 웹에서는 알람 스케줄링 건너뜀
+
     // 시연을 위해 2시간 뒤가 아닌 10초 뒤로 스케줄링하여 테스트 가능하도록 함 (실제: hours: 2)
     final scheduledDate = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10)); 
 

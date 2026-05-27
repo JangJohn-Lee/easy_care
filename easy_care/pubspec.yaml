@@ -18,7 +18,7 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   image_picker: ^1.1.2  # 사진 촬영 및 갤러리 선택
-  google_mlkit_text_recognition: ^0.13.0 # OCR 글자 인식
+  google_mlkit_text_recognition: ^0.15.1 # OCR 글자 인식 (M1 대응 업데이트)
   kakao_flutter_sdk_user: ^1.9.5 # 카카오 로그인
   fl_chart: ^0.69.0 # 통계 그래프
   table_calendar: ^3.1.2 # 달력 기능

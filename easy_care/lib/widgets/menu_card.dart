@@ -37,15 +37,15 @@ class _MenuCardState extends State<MenuCard> {
         child: Container(
           // [규칙 1] 최소 터치 영역 60px 이상 확보를 위한 충분한 크기
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+              color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
               width: 1.5,
             ),
             boxShadow: isDark ? [] : [
               BoxShadow(
-                color: widget.color.withOpacity(0.12),
+                color: widget.color.withValues(alpha: 0.12),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
               )
@@ -58,7 +58,7 @@ class _MenuCardState extends State<MenuCard> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: widget.color.withOpacity(0.1),
+                  color: widget.color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(widget.icon, color: widget.color, size: 42),

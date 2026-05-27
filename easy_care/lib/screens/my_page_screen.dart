@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'login_screen.dart';
@@ -87,22 +88,27 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
     if (confirm2 != true) return;
 
-    // TODO: 사용자 고유 ID(kakao uid)에 매칭되는 데이터를 찾아서 일괄 삭제
-    // 여기서는 예시로 Firestore 내 'health_records'에 사용자 uid 필드가 있다고 가정할 때의 삭제 로직만 주석으로 남기고 인증 해제
-    /*
+    // [RULES.md v2.0] 회원 탈퇴 시 관련 데이터(health_records) 일괄 삭제 수행
     try {
-      final user = await UserApi.instance.me();
-      final uid = user.id.toString();
-      final batch = FirebaseFirestore.instance.batch();
-      var snapshots = await FirebaseFirestore.instance.collection('health_records').where('userId', isEqualTo: uid).get();
-      for (var doc in snapshots.docs) {
-        batch.delete(doc.reference);
+      final prefs = await SharedPreferences.getInstance();
+      final myCode = prefs.getString('myFamilyCode');
+      
+      if (myCode != null && myCode.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        final snapshots = await FirebaseFirestore.instance
+            .collection('health_records')
+            .where('creatorCode', isEqualTo: myCode)
+            .get();
+            
+        for (var doc in snapshots.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+        debugPrint('Firestore data deleted successfully for code: $myCode');
       }
-      await batch.commit();
     } catch (e) {
-      debugPrint('Firestore delete error: $e');
+      debugPrint('Firestore delete error during withdrawal: $e');
     }
-    */
 
     try {
       // 카카오 연결 끊기 (회원 탈퇴)
@@ -151,7 +157,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
               children: [
                 CircleAvatar(
                   radius: 30,
-                  backgroundColor: const Color(0xFF0052CC).withOpacity(0.2),
+                  backgroundColor: const Color(0xFF0052CC).withValues(alpha: 0.2),
                   child: const Icon(Icons.person, size: 36, color: Color(0xFF0052CC)),
                 ),
                 const SizedBox(width: 16),

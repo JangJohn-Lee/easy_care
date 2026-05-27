@@ -8,6 +8,7 @@ class HealthRecord {
   final int sugar;
   final int? systolic;
   final int? diastolic;
+  final double? hba1c; // 당화혈색소
   final String memo;
   final DateTime timestamp;
   final String? creatorCode; // 가족 연동을 위한 식별 코드
@@ -18,6 +19,7 @@ class HealthRecord {
     required this.sugar,
     this.systolic,
     this.diastolic,
+    this.hba1c,
     required this.memo,
     required this.timestamp,
     this.creatorCode,
@@ -32,6 +34,7 @@ class HealthRecord {
       sugar: (data['sugar'] as num?)?.toInt() ?? 0,
       systolic: (data['systolic'] as num?)?.toInt(),
       diastolic: (data['diastolic'] as num?)?.toInt(),
+      hba1c: (data['hba1c'] as num?)?.toDouble(),
       memo: data['memo'] ?? '',
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
       creatorCode: data['creatorCode'],
@@ -44,6 +47,7 @@ class HealthRecord {
       'sugar': sugar,
       'systolic': systolic,
       'diastolic': diastolic,
+      'hba1c': hba1c,
       'memo': memo,
       'timestamp': FieldValue.serverTimestamp(),
       'creatorCode': creatorCode,
@@ -140,5 +144,42 @@ class HealthRecord {
       "color": const Color(0xFF047857),
       "msg": "혈압이 매우 안정적입니다.",
     };
+  }
+
+  /// 당화혈색소 상태 진단
+  Map<String, dynamic> get hba1cStatus {
+    if (hba1c == null) {
+      return {"label": "미측정", "color": Colors.grey, "msg": "정기적인 검사가 필요합니다."};
+    }
+    if (hba1c! >= 6.5) {
+      return {
+        "label": "당뇨 수준",
+        "color": Colors.red.shade800,
+        "msg": "의사와 상담이 필요한 수치입니다. ⚠️",
+      };
+    }
+    if (hba1c! >= 5.7) {
+      return {
+        "label": "당뇨 전단계",
+        "color": Colors.orange,
+        "msg": "생활 습관 관리가 시작되어야 합니다.",
+      };
+    }
+    return {
+      "label": "정상",
+      "color": Colors.purple,
+      "msg": "아주 건강한 수치입니다. ✅",
+    };
+  }
+
+  /// 전체 데이터 중 하나라도 위험(Danger) 상태인지 확인
+  bool get isDanger {
+    final s = sugarStatus['label'];
+    final b = bloodPressureStatus['label'];
+    final h = hba1cStatus['label'];
+    
+    return s.contains("고혈당") || s.contains("저혈당") || 
+           b.contains("고혈압") || b.contains("저혈압") || 
+           h.contains("당뇨 수준");
   }
 }

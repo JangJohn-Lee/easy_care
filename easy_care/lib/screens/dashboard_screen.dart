@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/health_stat.dart'; 
-import '../widgets/menu_card.dart';
+import '../models/health_stat.dart';
 import 'input_screen.dart';
 import 'stats_screen.dart';
-import 'my_page_screen.dart';
 import 'family_screen.dart';
+import 'my_page_screen.dart';
+import '../widgets/menu_card.dart';
 
 class ModernDashboard extends StatefulWidget {
   final VoidCallback onThemeToggle;
+
   const ModernDashboard({super.key, required this.onThemeToggle});
 
   @override
@@ -84,35 +85,63 @@ class _ModernDashboardState extends State<ModernDashboard> {
 
           // [v1.5 규칙] 통합 진단 로직 활용
           final sugarInfo = lastRecord?.sugarStatus ?? {
-            "label": "기록 없음", 
-            "color": const Color(0xFF0052CC), 
+            "label": "기록 없음",
+            "color": const Color(0xFF0052CC),
             "msg": "첫 기록을 시작해보세요!"
           };
-          
+
           // bpInfo 활용: 혈압 상태 진단 데이터 가져오기
           final bpInfo = lastRecord?.bloodPressureStatus;
+          final hba1cInfo = lastRecord?.hba1cStatus;
+          final isDanger = lastRecord?.isDanger ?? false;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (isDanger) ...[
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade800,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(color: Colors.red.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))
+                      ],
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.white, size: 32),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "위험 수치가 감지되었습니다!\n상태 확인 및 관리가 필요합니다.",
+                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 Text(
                   "안녕하세요,\n$_userName님! 👋",
                   style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, height: 1.2),
                 ),
                 const SizedBox(height: 24),
-                
+
                 // --- [규칙 3] 하이브리드 대시보드 카드 ---
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: sugarInfo['color'],
+                    color: isDanger ? Colors.red.shade900 : sugarInfo['color'],
                     borderRadius: BorderRadius.circular(32),
                     boxShadow: [
                       BoxShadow(
-                        color: (sugarInfo['color'] as Color).withOpacity(0.4),
+                        color: (isDanger ? Colors.red.shade900 : sugarInfo['color'] as Color).withValues(alpha: 0.4),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       )
@@ -125,7 +154,7 @@ class _ModernDashboardState extends State<ModernDashboard> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            "최근 혈당 (${lastRecord?.type ?? '미정'})",
+                            "최근 혈당 (BST) (${lastRecord?.type ?? '미정'})",
                             style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.w600),
                           ),
                           if (lastRecord != null)
@@ -143,6 +172,12 @@ class _ModernDashboardState extends State<ModernDashboard> {
                           ),
                           const SizedBox(width: 8),
                           const Text("mg/dL", style: TextStyle(color: Colors.white60, fontSize: 20)),
+                          const Spacer(),
+                          if (lastRecord != null)
+                            Text(
+                              "(${sugarInfo['label']})",
+                              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                            ),
                         ],
                       ),
                       
@@ -154,19 +189,48 @@ class _ModernDashboardState extends State<ModernDashboard> {
                           const Icon(Icons.favorite_rounded, color: Colors.white70, size: 38),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              lastRecord?.systolic != null 
-                                  ? "혈압: ${lastRecord!.systolic}/${lastRecord.diastolic} (${bpInfo!['label']})"
-                                  : "혈압: 기록 없음",
-                              style: const TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis,
+                            child: RichText(
+                              overflow: TextOverflow.visible,
+                              text: TextSpan(
+                                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w600),
+                                children: [
+                                  TextSpan(
+                                    text: lastRecord?.systolic != null 
+                                        ? "혈압 (BP): ${lastRecord!.systolic}/${lastRecord.diastolic} "
+                                        : "혈압 (BP): 기록 없음 ",
+                                  ),
+                                  if (lastRecord?.systolic != null)
+                                    TextSpan(
+                                      text: "(${bpInfo!['label']})",
+                                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white70),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
+                      if (lastRecord?.hba1c != null) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(Icons.analytics_rounded, color: Colors.white70, size: 28),
+                            const SizedBox(width: 8),
+                            Text(
+                              "당화혈색소 (HbA1c): ${lastRecord!.hba1c}%",
+                              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              "(${hba1cInfo!['label']})",
+                              style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       
-                      // 통합 상태 메시지 배지 (혈당 기준)
+                      // 통합 상태 메시지 배지
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
@@ -174,7 +238,7 @@ class _ModernDashboardState extends State<ModernDashboard> {
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text(
-                          sugarInfo['msg'],
+                          isDanger ? "⚠️ 즉시 안정을 취하고 혈당/혈압을 재측정하세요." : sugarInfo['msg'],
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                       ),

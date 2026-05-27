@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "EasyCare (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "easy_care",
+      "toolArgs": ["--web-port", "8080"]
+    }
+  ]
+}

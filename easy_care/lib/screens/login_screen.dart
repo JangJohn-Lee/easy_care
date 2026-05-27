@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
 import 'dashboard_screen.dart';
 import '../main.dart'; // toggleTheme 접근용
 
@@ -45,20 +47,43 @@ class _LoginScreenState extends State<LoginScreen> {
             return;
           }
           // 카카오톡에 연결된 카카오계정이 없는 경우, 카카오계정으로 로그인
-          await UserApi.instance.loginWithKakaoAccount();
+          await UserApi.instance.loginWithKakaoAccount(prompts: [Prompt.login]);
         }
       } else {
-        await UserApi.instance.loginWithKakaoAccount();
+        await UserApi.instance.loginWithKakaoAccount(prompts: [Prompt.login]);
       }
 
       // 로그인 성공 시 정보 가져오기
       User user = await UserApi.instance.me();
+      final String kakaoId = user.id.toString();
+      final String nickname = user.kakaoAccount?.profile?.nickname ?? '사용자';
+      final String email = user.kakaoAccount?.email ?? '';
+
+      // [v3.3] Firestore에서 사용자 고유 코드 관리
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(kakaoId).get();
+      String familyCode;
       
-      // 로그인 상태 저장
+      if (userDoc.exists) {
+        // 기존 회원이면 저장된 코드 사용
+        familyCode = userDoc.data()?['familyCode'] ?? _generateRandomCode();
+      } else {
+        // 신규 회원이면 코드 생성 및 Firestore 저장
+        familyCode = _generateRandomCode();
+        await FirebaseFirestore.instance.collection('users').doc(kakaoId).set({
+          'nickname': nickname,
+          'email': email,
+          'familyCode': familyCode,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      
+      // 로그인 상태 및 코드 로컬 저장 (동기화)
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isLoggedIn', true);
-      await prefs.setString('userName', user.kakaoAccount?.profile?.nickname ?? '사용자');
-      await prefs.setString('userEmail', user.kakaoAccount?.email ?? '');
+      await prefs.setString('kakaoId', kakaoId);
+      await prefs.setString('userName', nickname);
+      await prefs.setString('userEmail', email);
+      await prefs.setString('myFamilyCode', familyCode);
 
       if (!mounted) return;
       _navigateToDashboard();
@@ -74,6 +99,13 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  String _generateRandomCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rnd = Random();
+    return String.fromCharCodes(Iterable.generate(
+        6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
   }
 
   void _navigateToDashboard() {

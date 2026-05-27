@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart'; // kIsWeb 사용
 // 정확한 모델 경로 및 클래스명(HealthRecord) 사용
 import '../models/health_stat.dart'; 
 import '../services/notification_service.dart';
@@ -21,23 +22,43 @@ class _InputScreenState extends State<InputScreen> {
   final TextEditingController _sugarController = TextEditingController();
   final TextEditingController _sysController = TextEditingController();
   final TextEditingController _diaController = TextEditingController();
+  final TextEditingController _hba1cController = TextEditingController();
   final TextEditingController _memoController = TextEditingController();
 
-  final _textRecognizer = TextRecognizer(script: TextRecognitionScript.korean);
+  // 웹에서는 TextRecognizer를 생성하지 않음
+  late final TextRecognizer? _textRecognizer;
   final ImagePicker _picker = ImagePicker();
 
   @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) {
+      _textRecognizer = TextRecognizer(script: TextRecognitionScript.korean);
+    } else {
+      _textRecognizer = null;
+    }
+  }
+
+  @override
   void dispose() {
-    _textRecognizer.close();
+    _textRecognizer?.close();
     _sugarController.dispose();
     _sysController.dispose();
     _diaController.dispose();
+    _hba1cController.dispose();
     _memoController.dispose();
     super.dispose();
   }
 
   // [RULES.md v1.6] 지능형 OCR 입력 로직
   Future<void> _processOCR() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('웹 환경에서는 사진 인식 기능을 지원하지 않습니다.'))
+      );
+      return;
+    }
+
     final XFile? image = await _picker.pickImage(
       source: ImageSource.camera,
       maxWidth: 1200,
@@ -59,37 +80,44 @@ class _InputScreenState extends State<InputScreen> {
         _sugarController.clear();
         _sysController.clear();
         _diaController.clear();
+        _hba1cController.clear();
       });
 
       final inputImage = InputImage.fromFilePath(image.path);
-      final recognizedText = await _textRecognizer.processImage(inputImage);
+      final recognizedText = await _textRecognizer!.processImage(inputImage);
       final String fullText = recognizedText.text.replaceAll(' ', '');
 
       // 숫자 추출 및 지능형 판단
-      List<int> numbers = RegExp(r'\d+')
+      List<num> numbers = RegExp(r'\d+(\.\d+)?')
           .allMatches(fullText)
-          .map((m) => int.parse(m.group(0)!))
+          .map((m) => num.parse(m.group(0)!))
           .toList();
 
       if (numbers.isNotEmpty) {
         setState(() {
           if (numbers.length == 1) {
-            _sugarController.text = numbers[0].toString();
+            _sugarController.text = numbers[0].toInt().toString();
           } else if (numbers.length == 2) {
-            _sugarController.text = numbers.firstWhere((n) => n > 20 && n < 300, orElse: () => numbers[0]).toString();
+            _sugarController.text = numbers.firstWhere((n) => n > 20 && n < 300, orElse: () => numbers[0]).toInt().toString();
           } else {
             if (fullText.contains('혈압')) {
-              List<int> bpCandidates = List.from(numbers);
+              List<num> bpCandidates = List.from(numbers);
               bpCandidates.sort((a, b) => b.compareTo(a)); 
-              _sysController.text = bpCandidates[0].toString();
-              _diaController.text = bpCandidates[1].toString();
+              _sysController.text = bpCandidates[0].toInt().toString();
+              _diaController.text = bpCandidates[1].toInt().toString();
               if (fullText.contains('혈당') && numbers.length > 2) {
-                _sugarController.text = bpCandidates[2].toString();
+                _sugarController.text = bpCandidates[2].toInt().toString();
               }
             } else {
-              _sugarController.text = numbers[0].toString();
+              _sugarController.text = numbers[0].toInt().toString();
             }
           }
+          
+          // 당화혈색소 후보 찾기 (보통 4.0 ~ 15.0 사이 소수점 포함 숫자)
+          try {
+            final hba1cCandidate = numbers.firstWhere((n) => n is double && n >= 4.0 && n <= 15.0);
+            _hba1cController.text = hba1cCandidate.toString();
+          } catch (_) {}
         });
       }
       
@@ -124,6 +152,7 @@ class _InputScreenState extends State<InputScreen> {
       sugar: int.parse(sugarText),
       systolic: int.tryParse(_sysController.text),
       diastolic: int.tryParse(_diaController.text),
+      hba1c: double.tryParse(_hba1cController.text),
       memo: _memoController.text,
       timestamp: DateTime.now(),
       creatorCode: myCode,
@@ -143,7 +172,7 @@ class _InputScreenState extends State<InputScreen> {
             Text("시점: ${record.type}", style: const TextStyle(fontSize: 18)),
             const Divider(),
             // 혈당 수치 표시
-            Text("혈당: ${record.sugar} mg/dL", 
+            Text("혈당(BST): ${record.sugar} mg/dL", 
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: record.sugarStatus['color'])),
             // 상세 진단 메시지 표시 (추가됨)
             Text("${record.sugarStatus['msg']}", 
@@ -152,11 +181,16 @@ class _InputScreenState extends State<InputScreen> {
             if (record.systolic != null) ...[
               const SizedBox(height: 12),
               // 혈압 수치 표시
-              Text("혈압: ${record.systolic}/${record.diastolic} mmHg", 
+              Text("혈압(BP): ${record.systolic}/${record.diastolic} mmHg", 
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue)),
               // 혈압 상세 메시지 표시 (추가됨)
               Text("${record.bloodPressureStatus['msg']}", 
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.blue)),
+            ],
+            if (record.hba1c != null) ...[
+              const SizedBox(height: 12),
+              Text("당화혈색소(HbA1c): ${record.hba1c}%", 
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple)),
             ],
           ],
         ),
@@ -177,17 +211,21 @@ class _InputScreenState extends State<InputScreen> {
       // toMap()을 활용한 Firestore 저장
       await FirebaseFirestore.instance.collection('health_records').add(record.toMap());
       
-      // 식전 기록인 경우 식후 2시간 푸시 알람 스케줄링
-      if (record.type == '식전') {
+      // 식전 기록인 경우 식후 2시간 푸시 알람 스케줄링 (모바일 전용)
+      if (record.type == '식전' && !kIsWeb) {
         await NotificationService().scheduleMealAlarm(mealType: '점심/저녁'); 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('저장 완료! 식후 2시간 뒤 알림이 설정되었습니다.'))
           );
         }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('저장 완료!'))
+        );
       }
 
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
     }
@@ -202,17 +240,18 @@ class _InputScreenState extends State<InputScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // OCR 촬영 버튼 (터치 영역 65px 확보)
+            // OCR 촬영 버튼 (웹에서는 비활성화 스타일 적용)
             SizedBox(
               width: double.infinity,
               height: 65,
               child: OutlinedButton.icon(
                 onPressed: _processOCR,
                 icon: const Icon(Icons.camera_alt, size: 28),
-                label: const Text('사진 촬영 / 재촬영', 
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                label: Text(kIsWeb ? '사진 촬영 (웹 미지원)' : '사진 촬영 / 재촬영', 
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF0052CC), width: 2),
+                  side: BorderSide(color: kIsWeb ? Colors.grey : const Color(0xFF0052CC), width: 2),
+                  foregroundColor: kIsWeb ? Colors.grey : const Color(0xFF0052CC),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
               ),
@@ -241,15 +280,17 @@ class _InputScreenState extends State<InputScreen> {
             const SizedBox(height: 30),
 
             // 입력 필드 (수치 22px+ 적용)
-            _buildInputField('혈당 수치 (mg/dL)', _sugarController, Icons.water_drop, Colors.redAccent),
+            _buildInputField('혈당 수치 (BST, mg/dL)', _sugarController, Icons.water_drop, Colors.redAccent),
             const SizedBox(height: 15),
             Row(
               children: [
-                Expanded(child: _buildInputField('최고(수축기)', _sysController, Icons.arrow_upward, Colors.orange)),
+                Expanded(child: _buildInputField('최고(BP 수축기)', _sysController, Icons.arrow_upward, Colors.orange)),
                 const SizedBox(width: 10),
-                Expanded(child: _buildInputField('최저(이완기)', _diaController, Icons.arrow_downward, Colors.blue)),
+                Expanded(child: _buildInputField('최저(BP 이완기)', _diaController, Icons.arrow_downward, Colors.blue)),
               ],
             ),
+            const SizedBox(height: 15),
+            _buildInputField('당화혈색소 (HbA1c, %)', _hba1cController, Icons.analytics, Colors.purple, isDecimal: true),
             const SizedBox(height: 15),
             _buildInputField('메모', _memoController, Icons.notes, Colors.grey, isMemo: true),
             
@@ -275,11 +316,15 @@ class _InputScreenState extends State<InputScreen> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller, IconData icon, Color color, {bool isMemo = false}) {
+  Widget _buildInputField(String label, TextEditingController controller, IconData icon, Color color, {bool isMemo = false, bool isDecimal = false}) {
     return TextField(
       controller: controller,
-      keyboardType: isMemo ? TextInputType.text : TextInputType.number,
-      inputFormatters: isMemo ? [] : [FilteringTextInputFormatter.digitsOnly],
+      keyboardType: isMemo 
+          ? TextInputType.text 
+          : (isDecimal ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.number),
+      inputFormatters: isMemo 
+          ? [] 
+          : [isDecimal ? FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')) : FilteringTextInputFormatter.digitsOnly],
       maxLines: isMemo ? 3 : 1,
       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
       decoration: InputDecoration(

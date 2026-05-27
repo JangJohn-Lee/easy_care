@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:math';
 import 'dart:convert';
+import 'stats_screen.dart'; // 통계 화면 이동을 위해 추가
 
 class FamilyScreen extends StatefulWidget {
   const FamilyScreen({super.key});
@@ -24,12 +25,25 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
   Future<void> _loadFamilyData() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _myCode = prefs.getString('myFamilyCode') ?? _generateRandomCode();
-      if (!prefs.containsKey('myFamilyCode')) {
-        prefs.setString('myFamilyCode', _myCode);
+    final kakaoId = prefs.getString('kakaoId');
+    
+    // [v3.3] Firestore에서 최신 정보 동기화
+    if (kakaoId != null) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(kakaoId).get();
+      if (userDoc.exists) {
+        final serverCode = userDoc.data()?['familyCode'];
+        if (serverCode != null) {
+          _myCode = serverCode;
+          await prefs.setString('myFamilyCode', serverCode);
+        }
       }
-      
+    }
+
+    if (_myCode.isEmpty) {
+      _myCode = prefs.getString('myFamilyCode') ?? '';
+    }
+
+    setState(() {
       final String? familyJson = prefs.getString('familyMembers');
       if (familyJson != null) {
         _familyMembers = List<Map<String, dynamic>>.from(json.decode(familyJson));
@@ -42,13 +56,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
   Future<void> _saveFamilyData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('familyMembers', json.encode(_familyMembers));
-  }
-
-  String _generateRandomCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final rnd = Random();
-    return String.fromCharCodes(Iterable.generate(
-        6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
   }
 
   void _showAddFamilyDialog() {
@@ -220,55 +227,44 @@ class _FamilyScreenState extends State<FamilyScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const Text('내 연결 코드 복사', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(32), // RULES.md 반영: 카드 32px
-                border: Border.all(color: primaryColor.withOpacity(0.3)),
+                color: isDark ? Colors.white10 : Colors.grey[100],
+                borderRadius: BorderRadius.circular(20),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('내 연결 코드', style: TextStyle(fontSize: 18, color: primaryColor, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _myCode.isEmpty ? '로딩중...' : _myCode, 
-                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 2.0),
-                      ),
-                      IconButton(
-                        constraints: const BoxConstraints(minWidth: 60, minHeight: 60),
-                        onPressed: () async {
-                          if (_myCode.isNotEmpty) {
-                            await Clipboard.setData(ClipboardData(text: _myCode));
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('코드가 복사되었습니다.', style: TextStyle(fontSize: 18))),
-                              );
-                            }
-                          }
-                        },
-                        icon: Icon(Icons.copy_rounded, size: 28, color: primaryColor),
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('이 코드를 가족에게 공유하여\n건강 데이터를 함께 관리하세요.', style: TextStyle(fontSize: 18)),
+                  Text(_myCode, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                  IconButton(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: _myCode));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('코드가 복사되었습니다.')));
+                      }
+                    },
+                    icon: const Icon(Icons.copy_rounded),
+                  )
                 ],
               ),
             ),
-            const SizedBox(height: 32),
-            const Text('연결된 가족', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            if (_familyMembers.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 24),
-                child: Text('아직 연결된 가족이 없습니다.', style: TextStyle(fontSize: 18, color: Colors.grey)),
-              ),
+            const Text('이 코드를 가족에게 공유하여\n건강 데이터를 함께 관리하세요.', style: TextStyle(fontSize: 18)),
+            
+            const SizedBox(height: 40),
+            const Text('데이터 열람 (가족 목록)', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            
+            // [v3.4] '나'를 목록 최상단에 고정 표시
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildMeTile(isDark, primaryColor),
+            ),
+
             ..._familyMembers.asMap().entries.map((entry) {
               int index = entry.key;
               Map<String, dynamic> member = entry.value;
@@ -277,8 +273,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 child: _buildFamilyMemberTile(isDark, primaryColor, member['name'], member['code'], Icons.face_4_rounded, index),
               );
             }),
+            
             const SizedBox(height: 12),
-            // RULES.md 반영: AnimatedScale 터치 피드백
             GestureDetector(
               onTapDown: (_) => setState(() => _isAddButtonPressed = true),
               onTapUp: (_) {
@@ -292,9 +288,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
                     border: Border.all(color: isDark ? Colors.white24 : Colors.black12, style: BorderStyle.solid),
-                    borderRadius: BorderRadius.circular(28), // RULES.md 반영: 메뉴 카드 28px
+                    borderRadius: BorderRadius.circular(28),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -313,52 +309,95 @@ class _FamilyScreenState extends State<FamilyScreen> {
     );
   }
 
-  Widget _buildFamilyMemberTile(bool isDark, Color primaryColor, String name, String code, IconData icon, int index) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white10 : Colors.white,
-        borderRadius: BorderRadius.circular(28), // RULES.md 반영: 메뉴 카드 28px
-        border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+  // [v3.4] 나를 위한 전용 타일 (에딧/삭제 버튼 없음)
+  Widget _buildMeTile(bool isDark, Color primaryColor) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StatsScreen(initialCreator: '나'))),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: primaryColor.withValues(alpha: 0.1), // '나'는 배경색으로 차별화
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: primaryColor,
+              radius: 28,
+              child: const Icon(Icons.person, color: Colors.white, size: 32),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('나 (본인)', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text('내 건강 기록 열람하기 >', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 32, color: primaryColor),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: primaryColor.withOpacity(0.2),
-            radius: 28,
-            child: Icon(icon, color: primaryColor, size: 32),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 20, color: Colors.grey),
-                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                      padding: EdgeInsets.zero,
-                      onPressed: () => _showEditMemoDialog(index),
-                    ),
-                  ],
-                ),
-                Text('코드: $code', style: const TextStyle(fontSize: 16, color: Colors.grey)),
-              ],
+    );
+  }
+
+  Widget _buildFamilyMemberTile(bool isDark, Color primaryColor, String name, String code, IconData icon, int index) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => StatsScreen(initialCreator: name)),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white10 : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: primaryColor.withValues(alpha: 0.2),
+              radius: 28,
+              child: Icon(icon, color: primaryColor, size: 32),
             ),
-          ),
-          OutlinedButton(
-            onPressed: () => _confirmDisconnect(index),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(60, 60),
-              foregroundColor: Colors.red.shade800, // RULES.md 반영: Danger 색상
-              side: BorderSide(color: Colors.red.shade800),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 20, color: Colors.grey),
+                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                        padding: EdgeInsets.zero,
+                        onPressed: () => _showEditMemoDialog(index),
+                      ),
+                    ],
+                  ),
+                  Text('코드: $code (기록 열람하기 >)', style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                ],
+              ),
             ),
-            child: const Text('연결 해제', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          )
-        ],
+            OutlinedButton(
+              onPressed: () => _confirmDisconnect(index),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(60, 60),
+                foregroundColor: Colors.red.shade800,
+                side: BorderSide(color: Colors.red.shade800),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('해제하기', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            )
+          ],
+        ),
       ),
     );
   }
