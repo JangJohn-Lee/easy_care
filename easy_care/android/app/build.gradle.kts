@@ -17,6 +17,7 @@ if (localPropertiesFile.exists()) {
 android {
     namespace = "com.example.easy_care"
     compileSdk = 36 
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -44,6 +45,7 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

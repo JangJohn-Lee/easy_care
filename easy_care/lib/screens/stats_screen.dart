@@ -10,31 +10,38 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/foundation.dart'; // kIsWeb 사용
 import '../models/health_stat.dart';
+import 'input_screen.dart'; // [추가] 수정 기능을 위한 임포트
 
 class StatsScreen extends StatefulWidget {
   final String? initialCreator; // 특정 인물의 통계를 바로 열람하기 위한 매개변수
-  const StatsScreen({super.key, this.initialCreator});
+  final DateTime? initialDate; // [추가] 특정 날짜로 바로 이동
+  final bool jumpToCalendar; // [추가] 달력 보기로 바로 시작할지 여부
+  const StatsScreen({super.key, this.initialCreator, this.initialDate, this.jumpToCalendar = false});
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
 }
 
 class _StatsScreenState extends State<StatsScreen> {
-  bool _isCalendarView = false;
+  late bool _isCalendarView;
   String _timeRange = '주간';
   String _chartType = '혈당'; // [규칙 3] 혈당/혈압 전환용
-  DateTime _focusedDay = DateTime.now();
+  late DateTime _focusedDay;
   DateTime? _selectedDay;
 
   List<String> _allowedCodes = [];
   Map<String, String> _codeToName = {}; // {코드: 이름} 매핑
   late String _selectedCreator; // 필터링용 선택된 작성자
   bool _isLoadingCodes = true;
+  bool _hasShownInitialDetail = false; // [추가] 초기 상세창 노출 여부
 
   @override
   void initState() {
     super.initState();
     _selectedCreator = widget.initialCreator ?? '전체';
+    _isCalendarView = widget.jumpToCalendar;
+    _focusedDay = widget.initialDate ?? DateTime.now();
+    _selectedDay = widget.initialDate;
     _loadFamilyCodes();
   }
 
@@ -209,15 +216,28 @@ class _StatsScreenState extends State<StatsScreen> {
           // 2. 선택된 작성자별 필터링
           final displayRecords = allAuthorizedRecords.where((r) {
             if (_selectedCreator == '전체') return true;
+            
+            // 내 코드 찾기 (목록의 첫 번째가 보통 '나')
+            final myCode = _allowedCodes.isNotEmpty ? _allowedCodes[0] : null;
+            
             if (_selectedCreator == '나') {
-              final myCode = _allowedCodes.isNotEmpty ? _allowedCodes[0] : '';
-              return r.creatorCode == myCode;
+              // 코드가 내 것과 일치하거나, 코드 자체가 없는 경우(레거시) '나'의 기록으로 간주
+              return r.creatorCode == myCode || r.creatorCode == null || r.creatorCode!.isEmpty;
             }
+            
             // 가족 필터링
             return _codeToName[r.creatorCode] == _selectedCreator;
           }).toList();
 
           final filteredRecords = _filterRecordsByRange(displayRecords);
+
+          // [추가] 초기 진입 시 상세 내역 자동 노출 (대시보드 클릭 대응)
+          if (!_hasShownInitialDetail && widget.initialDate != null && allAuthorizedRecords.isNotEmpty) {
+            _hasShownInitialDetail = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showDayDetail(widget.initialDate!, allAuthorizedRecords);
+            });
+          }
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -233,7 +253,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 const SizedBox(height: 20),
 
                 _isCalendarView
-                    ? _buildCalendarView(allAuthorizedRecords) // 캘린더는 전체 데이터를 넘겨줌 (내부에서 날짜 필터링)
+                    ? _buildCalendarView(displayRecords) // [수정] 전체가 아닌 선택된 작성자의 데이터만 전달
                     : _buildChartView(filteredRecords, isDark),
 
                 const SizedBox(height: 24),
@@ -373,29 +393,55 @@ class _StatsScreenState extends State<StatsScreen> {
     ];
 
     if (_chartType == '혈당') {
+      final maxDate = DateFormat('yy/MM/dd').format(reversed[maxSugarIdx].timestamp);
+      final minDate = DateFormat('yy/MM/dd').format(reversed[minSugarIdx].timestamp);
+
       horizontalLines.add(HorizontalLine(
         y: maxSugarVal,
         color: Colors.redAccent.withValues(alpha: 0.5), strokeWidth: 1.5, dashArray: [4, 4],
-        label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold), labelResolver: (_) => '최고 ($maxSugarVal)'),
+        label: HorizontalLineLabel(
+          show: true, 
+          alignment: Alignment.topRight, 
+          style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold), 
+          labelResolver: (_) => '최고 ($maxSugarVal) - $maxDate'
+        ),
       ));
       if (maxSugarVal != minSugarVal) {
         horizontalLines.add(HorizontalLine(
           y: minSugarVal,
           color: Colors.blueAccent.withValues(alpha: 0.5), strokeWidth: 1.5, dashArray: [4, 4],
-          label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold), labelResolver: (_) => '최저 ($minSugarVal)'),
+          label: HorizontalLineLabel(
+            show: true, 
+            alignment: Alignment.topRight, 
+            style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold), 
+            labelResolver: (_) => '최저 ($minSugarVal) - $minDate'
+          ),
         ));
       }
     } else {
+      final maxDate = DateFormat('yy/MM/dd').format(reversed[maxSysIdx].timestamp);
+      final minDate = DateFormat('yy/MM/dd').format(reversed[minDiaIdx].timestamp);
+
       horizontalLines.add(HorizontalLine(
         y: maxSysVal,
         color: Colors.redAccent.withValues(alpha: 0.5), strokeWidth: 1.5, dashArray: [4, 4],
-        label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold), labelResolver: (_) => '최고 수축기 ($maxSysVal)'),
+        label: HorizontalLineLabel(
+          show: true, 
+          alignment: Alignment.topRight, 
+          style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold), 
+          labelResolver: (_) => '최고 수축기 ($maxSysVal) - $maxDate'
+        ),
       ));
       if (maxSysVal != minDiaVal) {
         horizontalLines.add(HorizontalLine(
           y: minDiaVal,
           color: Colors.blueAccent.withValues(alpha: 0.5), strokeWidth: 1.5, dashArray: [4, 4],
-          label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold), labelResolver: (_) => '최저 이완기 ($minDiaVal)'),
+          label: HorizontalLineLabel(
+            show: true, 
+            alignment: Alignment.topRight, 
+            style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold), 
+            labelResolver: (_) => '최저 이완기 ($minDiaVal) - $minDate'
+          ),
         ));
       }
     }
@@ -433,40 +479,39 @@ class _StatsScreenState extends State<StatsScreen> {
             touchTooltipData: LineTouchTooltipData(
               getTooltipColor: (spot) => isDark ? Colors.grey.shade800 : Colors.black87.withValues(alpha: 0.8),
               tooltipRoundedRadius: 8,
+              maxContentWidth: 300, // 너비 더 확장
+              tooltipPadding: const EdgeInsets.all(12), // 패딩 추가로 공간 확보
+              fitInsideHorizontally: true,
+              fitInsideVertically: true,
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((LineBarSpot touchedSpot) {
                   final record = reversed[touchedSpot.spotIndex];
-                  final dateStr = "${record.timestamp.month}/${record.timestamp.day}";
-                  final creatorName = _codeToName[record.creatorCode] ?? '기타';
+                  final dateStr = DateFormat('yyyy/MM/dd HH:mm').format(record.timestamp);
                   
+                  // 작성자 정보를 제거하고 측정 정보에만 집중
+                  String tooltipText = '$dateStr\n(${record.type})\n';
                   if (_chartType == '혈당') {
-                    return LineTooltipItem(
-                      '$dateStr ($creatorName)\n',
-                      const TextStyle(color: Colors.white70, fontSize: 12),
-                      children: [
-                        TextSpan(
-                          text: '혈당: ${record.sugar}',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                      ],
-                    );
+                    tooltipText += '혈당: ${record.sugar} mg/dL';
                   } else {
                     bool isSys = touchedSpot.barIndex == 0;
                     String prefix = isSys ? "수축기: " : "이완기: ";
                     int val = isSys ? (record.systolic ?? 0) : (record.diastolic ?? 0);
-                    Color valColor = isSys ? Colors.orangeAccent : Colors.lightBlueAccent;
-
-                    return LineTooltipItem(
-                      '$dateStr ($creatorName)\n',
-                      const TextStyle(color: Colors.white70, fontSize: 12),
-                      children: [
-                        TextSpan(
-                          text: '$prefix$val',
-                          style: TextStyle(color: valColor, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                      ],
-                    );
+                    tooltipText += '$prefix$val mmHg';
                   }
+                  
+                  if (record.memo.isNotEmpty) {
+                    tooltipText += '\n메모: ${record.memo}';
+                  }
+
+                  return LineTooltipItem(
+                    tooltipText,
+                    const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      height: 1.4, // 줄 간격 확보
+                    ),
+                  );
                 }).toList();
               },
             ),
@@ -633,8 +678,8 @@ class _StatsScreenState extends State<StatsScreen> {
                     title: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        RichText(
-                          text: TextSpan(
+                        Text.rich(
+                          TextSpan(
                             style: DefaultTextStyle.of(context).style.copyWith(fontSize: 16),
                             children: [
                               TextSpan(text: "[$creatorName] ", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
@@ -644,6 +689,7 @@ class _StatsScreenState extends State<StatsScreen> {
                               TextSpan(text: "${record.systolic ?? '--'}/${record.diastolic ?? '--'}", style: TextStyle(color: record.bloodPressureStatus['color'], fontWeight: FontWeight.bold)),
                             ],
                           ),
+                          softWrap: true,
                         ),
                         if (record.hba1c != null)
                           Text("당화혈색소(HbA1c): ${record.hba1c}%", 
@@ -651,6 +697,16 @@ class _StatsScreenState extends State<StatsScreen> {
                       ],
                     ),
                     subtitle: Text("${record.type} | 메모: ${record.memo.isEmpty ? '없음' : record.memo}", style: const TextStyle(fontSize: 14)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF0052CC), size: 28),
+                      onPressed: () {
+                        Navigator.pop(context); // 바텀시트 닫기
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => InputScreen(recordToEdit: record)),
+                        );
+                      },
+                    ),
                   );
                 },
               ),

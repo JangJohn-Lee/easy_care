@@ -109,7 +109,11 @@ class _ModernDashboardState extends State<ModernDashboard> {
                       color: Colors.red.shade800,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
-                        BoxShadow(color: Colors.red.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))
+                        BoxShadow(
+                          color: Colors.red.withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        )
                       ],
                     ),
                     child: const Row(
@@ -133,116 +137,149 @@ class _ModernDashboardState extends State<ModernDashboard> {
                 const SizedBox(height: 24),
 
                 // --- [규칙 3] 하이브리드 대시보드 카드 ---
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: isDanger ? Colors.red.shade900 : sugarInfo['color'],
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (isDanger ? Colors.red.shade900 : sugarInfo['color'] as Color).withValues(alpha: 0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "최근 혈당 (BST) (${lastRecord?.type ?? '미정'})",
-                            style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.w600),
+                GestureDetector(
+                  onTap: () {
+                    if (lastRecord != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StatsScreen(
+                            initialDate: lastRecord!.timestamp,
+                            jumpToCalendar: true,
                           ),
-                          if (lastRecord != null)
-                            const Icon(Icons.verified_user_rounded, color: Colors.white70, size: 20),
+                        ),
+                      );
+                    }
+                  },
+                  child: AnimatedScale(
+                    scale: 1.0,
+                    duration: const Duration(milliseconds: 100),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: isDanger ? Colors.red.shade900 : sugarInfo['color'],
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isDanger ? Colors.red.shade900 : sugarInfo['color'] as Color).withValues(alpha: 0.4),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          )
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            lastRecord?.sugar.toString() ?? "--",
-                            style: const TextStyle(color: Colors.white, fontSize: 64, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text("mg/dL", style: TextStyle(color: Colors.white60, fontSize: 20)),
-                          const Spacer(),
-                          if (lastRecord != null)
-                            Text(
-                              "(${sugarInfo['label']})",
-                              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                            ),
-                        ],
-                      ),
-                      
-                      const Divider(color: Colors.white24, height: 32),
-                      
-                      // --- [규칙 3] bpInfo를 활용한 혈압 진단 표시 ---
-                      Row(
-                        children: [
-                          const Icon(Icons.favorite_rounded, color: Colors.white70, size: 38),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: RichText(
-                              overflow: TextOverflow.visible,
-                              text: TextSpan(
-                                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w600),
-                                children: [
-                                  TextSpan(
-                                    text: lastRecord?.systolic != null 
-                                        ? "혈압 (BP): ${lastRecord!.systolic}/${lastRecord.diastolic} "
-                                        : "혈압 (BP): 기록 없음 ",
-                                  ),
-                                  if (lastRecord?.systolic != null)
-                                    TextSpan(
-                                      text: "(${bpInfo!['label']})",
-                                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white70),
-                                    ),
-                                ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "최근 혈당 (BST) (${lastRecord?.type ?? '미정'})",
+                                style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.w600),
                               ),
-                            ),
+                              if (lastRecord != null)
+                                const Row(
+                                  children: [
+                                    Text("수정하기", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                                    SizedBox(width: 4),
+                                    Icon(Icons.edit_note_rounded, color: Colors.white70, size: 20),
+                                  ],
+                                ),
+                            ],
                           ),
-                        ],
-                      ),
-                      if (lastRecord?.hba1c != null) ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Icon(Icons.analytics_rounded, color: Colors.white70, size: 28),
-                            const SizedBox(width: 8),
-                            Text(
-                              "당화혈색소 (HbA1c): ${lastRecord!.hba1c}%",
-                              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              "(${hba1cInfo!['label']})",
-                              style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold),
+                          const SizedBox(height: 8),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                lastRecord?.sugar.toString() ?? "--",
+                                style: const TextStyle(color: Colors.white, fontSize: 64, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text("mg/dL", style: TextStyle(color: Colors.white60, fontSize: 20)),
+                              const SizedBox(width: 16),
+                              if (lastRecord != null)
+                                Expanded(
+                                  child: Text(
+                                    "(${sugarInfo['label']})",
+                                    textAlign: TextAlign.end,
+                                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          
+                          const Divider(color: Colors.white24, height: 32),
+                          
+                          Row(
+                            children: [
+                              const Icon(Icons.favorite_rounded, color: Colors.white70, size: 38),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: RichText(
+                                  overflow: TextOverflow.visible,
+                                  text: TextSpan(
+                                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w600),
+                                    children: [
+                                      TextSpan(
+                                        text: lastRecord?.systolic != null 
+                                            ? "혈압 (BP): ${lastRecord!.systolic}/${lastRecord.diastolic} "
+                                            : "혈압 (BP): 기록 없음 ",
+                                      ),
+                                      if (lastRecord?.systolic != null)
+                                        TextSpan(
+                                          text: "(${bpInfo!['label']})",
+                                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white70),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (lastRecord?.hba1c != null) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                const Icon(Icons.analytics_rounded, color: Colors.white70, size: 28),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text.rich(
+                                    TextSpan(
+                                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w600),
+                                      children: [
+                                        TextSpan(text: "당화혈색소 (HbA1c): ${lastRecord!.hba1c}% "),
+                                        TextSpan(
+                                          text: "(${hba1cInfo!['label']})",
+                                          style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                    overflow: TextOverflow.visible,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      
-                      // 통합 상태 메시지 배지
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Text(
-                          isDanger ? "⚠️ 즉시 안정을 취하고 혈당/혈압을 재측정하세요." : sugarInfo['msg'],
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
+                          const SizedBox(height: 20),
+                          
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: Text(
+                              isDanger ? "⚠️ 즉시 안정을 취하고 혈당/혈압을 재측정하세요." : sugarInfo['msg'],
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
                 

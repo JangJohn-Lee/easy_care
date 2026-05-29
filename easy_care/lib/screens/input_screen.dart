@@ -10,7 +10,8 @@ import '../models/health_stat.dart';
 import '../services/notification_service.dart';
 
 class InputScreen extends StatefulWidget {
-  const InputScreen({super.key});
+  final HealthRecord? recordToEdit; // [수정] 수정을 위한 매개변수 추가
+  const InputScreen({super.key, this.recordToEdit});
 
   @override
   State<InputScreen> createState() => _InputScreenState();
@@ -18,7 +19,7 @@ class InputScreen extends StatefulWidget {
 
 class _InputScreenState extends State<InputScreen> {
   // [RULES.md v1.6] 상태 관리 및 컨트롤러
-  String _selectedType = '공복';
+  late String _selectedType;
   final TextEditingController _sugarController = TextEditingController();
   final TextEditingController _sysController = TextEditingController();
   final TextEditingController _diaController = TextEditingController();
@@ -32,6 +33,19 @@ class _InputScreenState extends State<InputScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // [수정] 수정 모드인 경우 기존 데이터 채우기
+    if (widget.recordToEdit != null) {
+      _selectedType = widget.recordToEdit!.type;
+      _sugarController.text = widget.recordToEdit!.sugar.toString();
+      _sysController.text = widget.recordToEdit!.systolic?.toString() ?? '';
+      _diaController.text = widget.recordToEdit!.diastolic?.toString() ?? '';
+      _hba1cController.text = widget.recordToEdit!.hba1c?.toString() ?? '';
+      _memoController.text = widget.recordToEdit!.memo;
+    } else {
+      _selectedType = '공복';
+    }
+
     if (!kIsWeb) {
       _textRecognizer = TextRecognizer(script: TextRecognitionScript.korean);
     } else {
@@ -208,8 +222,16 @@ class _InputScreenState extends State<InputScreen> {
     if (confirm != true) return;
 
     try {
-      // toMap()을 활용한 Firestore 저장
-      await FirebaseFirestore.instance.collection('health_records').add(record.toMap());
+      if (widget.recordToEdit != null) {
+        // [수정] 기존 기록 업데이트
+        await FirebaseFirestore.instance
+            .collection('health_records')
+            .doc(widget.recordToEdit!.id)
+            .update(record.toMap());
+      } else {
+        // [신규] 새 기록 저장
+        await FirebaseFirestore.instance.collection('health_records').add(record.toMap());
+      }
       
       // 식전 기록인 경우 식후 2시간 푸시 알람 스케줄링 (모바일 전용)
       if (record.type == '식전' && !kIsWeb) {
@@ -221,7 +243,7 @@ class _InputScreenState extends State<InputScreen> {
         }
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('저장 완료!'))
+          SnackBar(content: Text(widget.recordToEdit != null ? '수정 완료!' : '저장 완료!'))
         );
       }
 
@@ -234,29 +256,31 @@ class _InputScreenState extends State<InputScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('건강 기록 입력')),
+      appBar: AppBar(title: Text(widget.recordToEdit != null ? '건강 기록 수정' : '건강 기록 입력')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // OCR 촬영 버튼 (웹에서는 비활성화 스타일 적용)
-            SizedBox(
-              width: double.infinity,
-              height: 65,
-              child: OutlinedButton.icon(
-                onPressed: _processOCR,
-                icon: const Icon(Icons.camera_alt, size: 28),
-                label: Text(kIsWeb ? '사진 촬영 (웹 미지원)' : '사진 촬영 / 재촬영', 
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: kIsWeb ? Colors.grey : const Color(0xFF0052CC), width: 2),
-                  foregroundColor: kIsWeb ? Colors.grey : const Color(0xFF0052CC),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            if (widget.recordToEdit == null) ...[ // 수정 모드에서는 사진 촬영 숨김
+              SizedBox(
+                width: double.infinity,
+                height: 65,
+                child: OutlinedButton.icon(
+                  onPressed: _processOCR,
+                  icon: const Icon(Icons.camera_alt, size: 28),
+                  label: Text(kIsWeb ? '사진 촬영 (웹 미지원)' : '사진 촬영 / 재촬영', 
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: kIsWeb ? Colors.grey : const Color(0xFF0052CC), width: 2),
+                    foregroundColor: kIsWeb ? Colors.grey : const Color(0xFF0052CC),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 30),
+              const SizedBox(height: 30),
+            ],
 
             // 측정 시점 선택
             const Text("언제 측정하셨나요?", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -279,20 +303,74 @@ class _InputScreenState extends State<InputScreen> {
             ),
             const SizedBox(height: 30),
 
-            // 입력 필드 (수치 22px+ 적용)
-            _buildInputField('혈당 수치 (BST, mg/dL)', _sugarController, Icons.water_drop, Colors.redAccent),
-            const SizedBox(height: 15),
+            // --- 혈당 섹션 ---
+            const Text("🩸 혈당 (BST)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+            const SizedBox(height: 10),
+            _buildInputField(
+              '혈당 수치', 
+              _sugarController, 
+              Icons.water_drop, 
+              Colors.redAccent,
+              hint: '예: 100',
+              suffix: 'mg/dL',
+            ),
+            const SizedBox(height: 25),
+
+            // --- 혈압 섹션 ---
+            const Text("❤️ 혈압 (BP)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
+            const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: _buildInputField('최고(BP 수축기)', _sysController, Icons.arrow_upward, Colors.orange)),
+                Expanded(
+                  child: _buildInputField(
+                    '최고(수축기)', 
+                    _sysController, 
+                    Icons.arrow_upward, 
+                    Colors.orange,
+                    hint: '120',
+                    suffix: 'mmHg',
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _buildInputField('최저(BP 이완기)', _diaController, Icons.arrow_downward, Colors.blue)),
+                Expanded(
+                  child: _buildInputField(
+                    '최저(이완기)', 
+                    _diaController, 
+                    Icons.arrow_downward, 
+                    Colors.blue,
+                    hint: '80',
+                    suffix: 'mmHg',
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 15),
-            _buildInputField('당화혈색소 (HbA1c, %)', _hba1cController, Icons.analytics, Colors.purple, isDecimal: true),
-            const SizedBox(height: 15),
-            _buildInputField('메모', _memoController, Icons.notes, Colors.grey, isMemo: true),
+            const SizedBox(height: 25),
+
+            // --- 당화혈색소 섹션 ---
+            const Text("📊 당화혈색소 (HbA1c)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple)),
+            const SizedBox(height: 10),
+            _buildInputField(
+              '당화혈색소', 
+              _hba1cController, 
+              Icons.analytics, 
+              Colors.purple, 
+              isDecimal: true,
+              hint: '예: 5.7',
+              suffix: '%',
+            ),
+            const SizedBox(height: 25),
+
+            // --- 메모 섹션 ---
+            const Text("📝 메모", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey)),
+            const SizedBox(height: 10),
+            _buildInputField(
+              '참고사항 입력', 
+              _memoController, 
+              Icons.notes, 
+              Colors.grey, 
+              isMemo: true,
+              hint: '컨디션 등을 적어주세요.',
+            ),
             
             const SizedBox(height: 40),
             
@@ -307,7 +385,8 @@ class _InputScreenState extends State<InputScreen> {
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text('기록 완료하기', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                child: Text(widget.recordToEdit != null ? '기록 수정 완료하기' : '기록 완료하기', 
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -316,7 +395,13 @@ class _InputScreenState extends State<InputScreen> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller, IconData icon, Color color, {bool isMemo = false, bool isDecimal = false}) {
+  Widget _buildInputField(
+    String label, 
+    TextEditingController controller, 
+    IconData icon, 
+    Color color, 
+    {bool isMemo = false, bool isDecimal = false, String? hint, String? suffix}
+  ) {
     return TextField(
       controller: controller,
       keyboardType: isMemo 
@@ -329,6 +414,9 @@ class _InputScreenState extends State<InputScreen> {
       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
       decoration: InputDecoration(
         labelText: label,
+        hintText: hint, // [추가] 힌트 텍스트
+        suffixText: suffix, // [추가] 단위 표시
+        suffixStyle: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.normal),
         labelStyle: const TextStyle(fontSize: 16),
         prefixIcon: Icon(icon, color: color, size: 28),
         filled: true,
